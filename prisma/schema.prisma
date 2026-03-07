@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String       @id @default(uuid())
+  username  String       @unique
+  password  String
+  name      String
+  role      String       @default("STUDENT") // ADMIN or STUDENT
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  assignments Assignment[]
+}
+
+model PackageCategory {
+  id        String   @id @default(uuid())
+  name      String   // e.g. "Kelas 11", "Kelas 12"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tryouts   Tryout[]
+}
+
+model Tryout {
+  id            String       @id @default(uuid())
+  title         String
+  category      String       // UTBK, TKA, CPNS, dll
+  description   String?
+  duration      Int?         // Durasi timer dalam menit (null = tanpa batas waktu)
+  categoryId    String?      // Link ke PackageCategory
+  pdfLink       String?      // Link pembahasan berupa PDF/Drive
+  youtubeLink   String?      // Link video pembahasan YouTube
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  packageCategory PackageCategory? @relation(fields: [categoryId], references: [id])
+  questions       Question[]
+  assignments     Assignment[]
+}
+
+model Question {
+  id            String   @id @default(uuid())
+  tryoutId      String
+  questionType  String   @default("PG") // PG, PGK, ISIAN
+  questionText  String
+  imageUrl      String?  // URL gambar soal (opsional)
+  optionA       String?  // Nullable for ISIAN type
+  optionB       String?
+  optionC       String?
+  optionD       String?
+  optionE       String?
+  correctAnswer String   // "A", "B", "C", "D", "E", "A,C,D" (PGK), or free text (ISIAN)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tryout        Tryout   @relation(fields: [tryoutId], references: [id], onDelete: Cascade)
+}
+
+model Assignment {
+  id          String   @id @default(uuid())
+  studentId   String
+  tryoutId    String
+  status      String   @default("PENDING") // PENDING, ONGOING, COMPLETED
+  score       Float?
+  startTime   DateTime?
+  endTime     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student     User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tryout      Tryout   @relation(fields: [tryoutId], references: [id], onDelete: Cascade)
+  answers     Answer[]
+}
+
+model Answer {
+  id             String     @id @default(uuid())
+  assignmentId   String
+  questionId     String
+  selectedOption String?    // "A", "B", "C", "D", "E" or "A,C,D" for PGK
+  answerText     String?    // Free text answer for ISIAN type
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  assignment     Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+}
