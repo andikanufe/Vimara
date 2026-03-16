@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import MathText from '@/components/MathText';
+import { useUI } from '@/providers/UIProvider';
 
 type Question = {
   id: string;
@@ -32,6 +33,7 @@ export default function ExamInterface({
   startTime: string | null;
 }) {
   const router = useRouter();
+  const { alert, confirm, toast } = useUI();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers);
   const [doubted, setDoubted] = useState<Record<string, boolean>>({});
@@ -54,8 +56,8 @@ export default function ExamInterface({
   // Keep navPage synced with currentIndex
   useEffect(() => {
     const page = Math.floor(currentIndex / NAV_PAGE_SIZE);
-    if (page !== navPage) setNavPage(page);
-  }, [currentIndex, navPage]);
+    setNavPage(page);
+  }, [currentIndex]);
 
   // Build options list for PG/PGK
   const options: string[] = [];
@@ -143,9 +145,9 @@ export default function ExamInterface({
       });
       const data = await res.json();
       if (res.ok) { router.push(data.redirect); }
-      else { alert(data.error || 'Terjadi kesalahan'); setIsSubmitting(false); }
-    } catch { alert('Terjadi kesalahan jaringan'); setIsSubmitting(false); }
-  }, [assignmentId, isSubmitting, router]);
+      else { alert('Gagal', data.error || 'Terjadi kesalahan'); setIsSubmitting(false); }
+    } catch { alert('Error', 'Terjadi kesalahan jaringan'); setIsSubmitting(false); }
+  }, [assignmentId, isSubmitting, router, alert]);
 
   useEffect(() => {
     if (timeLeft === 0 && !hasAutoSubmitted.current) {
@@ -201,8 +203,8 @@ export default function ExamInterface({
   };
 
   const confirmFinish = async () => {
-    if (!confirm('Apakah Anda yakin ingin mengumpulkan ujian ini?')) return;
-    handleFinish();
+    const ok = await confirm('Selesai Ujian?', 'Apakah Anda yakin ingin mengumpulkan ujian ini? Hasil akan langsung dikalkulasi.');
+    if (ok) handleFinish();
   };
 
   const toggleDoubt = () => {
@@ -392,7 +394,7 @@ export default function ExamInterface({
           <div className="v2-question-panel">
             <div className="v2-question-card">
               {currentQ.imageUrl && (
-                <div style={{ marginBottom: '1rem' }}>
+                <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
                   <img src={currentQ.imageUrl} alt="Soal" style={{ maxWidth: '100%', maxHeight: '400px', borderRadius: '8px', border: '1px solid #e5e7eb' }} />
                 </div>
               )}
@@ -459,11 +461,18 @@ export default function ExamInterface({
                     const isChecked = selectedPGK.includes(opt);
                     return (
                       <button key={opt} onClick={() => handleToggleOption(opt)}
-                        className={`v2-option ${isChecked ? 'selected' : ''}`}>
-                        <span className="v2-option-circle" style={{ background: isChecked ? optionColors[opt] : '#f3f4f6', color: isChecked ? '#fff' : '#6b7280', borderColor: isChecked ? optionColors[opt] : '#e5e7eb' }}>
-                          {opt}
+                        className={`v2-option ${isChecked ? 'selected' : ''}`} style={{ textAlign: 'left', alignItems: 'flex-start' }}>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: '24px', height: '24px', borderRadius: '4px', border: '2px solid',
+                          marginRight: '0.75rem', flexShrink: 0,
+                          background: isChecked ? '#3B82F6' : '#fff',
+                          borderColor: isChecked ? '#3B82F6' : '#d1d5db',
+                          color: '#fff'
+                        }}>
+                          {isChecked && <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
                         </span>
-                        <span className="v2-option-text"><MathText text={optionText} /></span>
+                        <span className="v2-option-text" style={{ flex: 1, paddingTop: '2px' }}><MathText text={optionText} /></span>
                       </button>
                     );
                   } else {

@@ -45,13 +45,10 @@ export default function Login() {
 
       <div className="glass-container animate-in">
         <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-          <div className="logo-icon">
-            <svg width="28" height="28" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-            </svg>
+          <div className="logo-container" style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+            <img src="/vimara-logo.svg" alt="Vimara Logo" style={{ height: '100px', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.1))' }} />
           </div>
-          <h1 className="landing-title">Tryout Platform</h1>
+          <h1 className="landing-title">Platform Sarana Latihan Vimara</h1>
           <p className="landing-subtitle">
             Persiapkan masa depanmu dari sekarang
           </p>

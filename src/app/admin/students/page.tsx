@@ -1,14 +1,26 @@
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/firebase-admin';
 
 export default async function StudentsPage() {
-  const students = await prisma.user.findMany({
-    where: { role: 'STUDENT' },
-    include: {
-      assignments: {
-        include: { tryout: true }
-      }
-    }
-  });
+  const studentsSnap = await db.collection('users').where('role', '==', 'STUDENT').get();
+
+  const students = await Promise.all(studentsSnap.docs.map(async (doc) => {
+    const assignmentsSnap = await db.collection('assignments').where('studentId', '==', doc.id).get();
+    const assignments = await Promise.all(assignmentsSnap.docs.map(async (aDoc) => {
+      const a = aDoc.data();
+      const tryoutSnap = await db.collection('tryouts').doc(a.tryoutId as string).get();
+      return {
+        id: aDoc.id,
+        ...a,
+        tryout: { id: tryoutSnap.id, ...(tryoutSnap.exists ? tryoutSnap.data() : { title: 'Unknown' }) }
+      };
+    }));
+
+    return {
+      id: doc.id,
+      ...doc.data(),
+      assignments
+    };
+  }));
 
   return (
     <div className="animate-in">
@@ -27,13 +39,13 @@ export default async function StudentsPage() {
           <div key={student.id} className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-light)', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div>
-                <h2 style={{ fontSize: '1.125rem', fontWeight: 700 }}>{student.name}</h2>
-                <div className="text-muted text-sm">@{student.username}</div>
-              </div>
-              <div>
-                <span className="badge badge-primary">
-                  Selesai: {student.assignments.filter(a => a.status === 'COMPLETED').length} / {student.assignments.length}
-                </span>
+                <h2 style={{ fontSize: '1.125rem', fontWeight: 700 }}>{(student as any).name as string}</h2>
+                <div className="text-muted text-sm">@{(student as any).username as string}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.75rem' }}>
+                  <span className="badge badge-primary">
+                    Selesai: {((student as any).assignments || []).filter((a: any) => a.status === 'COMPLETED').length} / {((student as any).assignments || []).length}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -47,18 +59,18 @@ export default async function StudentsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {student.assignments.map(assignment => (
+                  {((student as any).assignments || []).map((assignment: any) => (
                     <tr key={assignment.id}>
-                      <td style={{ fontWeight: 500 }}>{assignment.tryout.title}</td>
+                      <td style={{ fontWeight: 500 }}>{assignment.tryout.title as string}</td>
                       <td>
                         <span className={`badge ${assignment.status === 'COMPLETED' ? 'badge-success' :
-                            assignment.status === 'ONGOING' ? 'badge-warning' : 'badge-muted'
+                          assignment.status === 'ONGOING' ? 'badge-warning' : 'badge-muted'
                           }`}>
-                          {assignment.status}
+                          {assignment.status as string}
                         </span>
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: assignment.score !== null ? 'var(--primary)' : 'var(--text-muted)' }}>
-                        {assignment.score !== null ? assignment.score.toFixed(2) : '-'}
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: assignment.score !== null && assignment.score !== undefined ? 'var(--primary)' : 'var(--text-muted)' }}>
+                        {assignment.score !== null && assignment.score !== undefined ? Number(assignment.score).toFixed(2) : '-'}
                       </td>
                     </tr>
                   ))}

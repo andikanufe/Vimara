@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/firebase-admin';
 import { getSession } from '@/lib/auth';
 import Link from 'next/link';
 
@@ -9,38 +9,45 @@ export default async function TryoutIntroPage({ params }: { params: Promise<{ id
 
   if (!session) return redirect('/');
 
-  const assignment = await prisma.assignment.findFirst({
-    where: {
-      tryoutId: tryoutId,
-      studentId: session.id
-    },
-    include: {
-      tryout: {
-        include: {
-          _count: { select: { questions: true } }
-        }
-      }
-    }
-  });
+  const assignmentSnap = await db.collection('assignments')
+    .where('studentId', '==', session.id)
+    .get();
 
-  if (!assignment) return notFound();
+  const aDocFound = assignmentSnap.docs.find(d => d.data().tryoutId === tryoutId);
+  if (!aDocFound) return notFound();
 
-  if (assignment.status === 'COMPLETED') {
+  const aDocId = aDocFound.id;
+  const assignmentData = aDocFound.data();
+
+  if (assignmentData.status === 'COMPLETED') {
     return redirect(`/student/tryouts/${tryoutId}/result`);
   }
 
-  const dur = (assignment.tryout as Record<string, unknown>).duration as number | null;
+  const tryoutDoc = await db.collection('tryouts').doc(tryoutId).get();
+  if (!tryoutDoc.exists) return notFound();
+
+  const tryoutData = tryoutDoc.data()!;
+
+  const qCountSnap = await db.collection('questions').where('tryoutId', '==', tryoutId).count().get();
+
+  const assignment = {
+    id: aDocId,
+    ...assignmentData,
+    tryout: {
+      ...tryoutData,
+      _count: { questions: qCountSnap.data().count }
+    }
+  } as any;
+
+  const dur = tryoutData.duration as number | null;
 
   async function startTryout() {
     'use server';
 
-    if (assignment?.status === 'PENDING') {
-      await prisma.assignment.update({
-        where: { id: assignment.id },
-        data: {
-          status: 'ONGOING',
-          startTime: new Date()
-        }
+    if (assignmentData.status === 'PENDING') {
+      await db.collection('assignments').doc(aDocId).update({
+        status: 'ONGOING',
+        startTime: new Date()
       });
     }
 
@@ -55,11 +62,11 @@ export default async function TryoutIntroPage({ params }: { params: Promise<{ id
 
       <div className="card" style={{ textAlign: 'center', padding: '2rem 1.5rem' }}>
         <span className="badge badge-primary" style={{ marginBottom: '1rem', display: 'inline-flex' }}>
-          {assignment.tryout.category}
+          {assignment.tryout.category as string}
         </span>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.75rem' }}>{assignment.tryout.title}</h1>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.75rem' }}>{assignment.tryout.title as string}</h1>
         <p className="text-muted text-sm" style={{ marginBottom: '1.5rem', maxWidth: '400px', margin: '0 auto 1.5rem' }}>
-          {assignment.tryout.description || 'Tidak ada deskripsi spesifik untuk tryout ini.'}
+          {assignment.tryout.description as string || 'Tidak ada deskripsi spesifik untuk tryout ini.'}
         </p>
 
         <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', marginBottom: '2rem', padding: '1.25rem', backgroundColor: 'var(--bg-color)', borderRadius: 'var(--radius)', flexWrap: 'wrap' }}>
@@ -87,11 +94,19 @@ export default async function TryoutIntroPage({ params }: { params: Promise<{ id
           </div>
         )}
 
-        <form action={startTryout}>
-          <button type="submit" className="btn btn-primary btn-lg">
-            {assignment.status === 'ONGOING' ? 'Lanjutkan Pengerjaan' : 'Mulai Sekarang'}
-          </button>
-        </form>
+        <div style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary-dark)', padding: '1rem', borderRadius: 'var(--radius-sm)', marginBottom: '1.5rem', textAlign: 'left', fontSize: '0.875rem', lineHeight: 1.6, border: '1px solid var(--primary)' }}>
+          <strong>📋 Informasi Mengerjakan & Hasil:</strong><br />
+          Anda diwajibkan untuk mengerjakan ujian secara online terlebih dahulu. Jika nilai Anda <strong>kurang dari atau sama dengan 70</strong>, sistem akan menyediakan tombol <strong>Download Soal (PDF)</strong> di halaman hasil agar Anda bisa melakukan <strong>Ulangi Ujian</strong>. Kunci jawaban lengkap belum akan ditampilkan.<br /><br />
+          Jika nilai capaian Anda sudah <strong>lebih dari 70</strong>, maka seluruh fitur akan terbuka penuh, termasuk <strong>Download Soal PDF</strong>, <strong>Link Video Pembahasan</strong>, dan <strong>Kunci Jawaban Lengkap</strong>.
+        </div>
+
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <form action={startTryout}>
+            <button type="submit" className="btn btn-primary btn-lg">
+              {assignment.status === 'ONGOING' ? 'Lanjutkan Pengerjaan' : 'Mulai Sekarang'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

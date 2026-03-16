@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
@@ -12,9 +12,13 @@
     "@prisma/client": "^5.22.0",
     "@types/katex": "^0.16.8",
     "bcryptjs": "^3.0.3",
+    "firebase": "^12.10.0",
+    "firebase-admin": "^13.7.0",
+    "html2pdf.js": "^0.14.0",
     "jose": "^6.2.0",
     "katex": "^0.16.37",
     "next": "16.1.6",
+    "pyodide": "^0.29.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "xlsx": "^0.18.5"

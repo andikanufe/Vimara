@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/firebase-admin';
 
 // POST — add a tryout to a category
 export async function POST(req: NextRequest) {
@@ -9,10 +9,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'tryoutId dan categoryId wajib diisi' }, { status: 400 });
     }
 
-    await prisma.tryout.update({
-        where: { id: tryoutId },
-        data: { categoryId }
-    });
+    await db.collection('tryouts').doc(tryoutId).update({ categoryId });
 
     return NextResponse.json({ success: true });
 }
@@ -25,10 +22,7 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json({ error: 'tryoutId wajib diisi' }, { status: 400 });
     }
 
-    await prisma.tryout.update({
-        where: { id: tryoutId },
-        data: { categoryId: null }
-    });
+    await db.collection('tryouts').doc(tryoutId).update({ categoryId: null });
 
     return NextResponse.json({ success: true });
 }

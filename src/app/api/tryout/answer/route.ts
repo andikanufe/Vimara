@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/firebase-admin';
 import { getSession } from '@/lib/auth';
 
 export async function POST(request: Request) {
@@ -12,28 +12,26 @@ export async function POST(request: Request) {
     const { assignmentId, questionId, selectedOption, answerText } = await request.json();
 
     // Verify assignment belongs to student
-    const assignment = await prisma.assignment.findUnique({
-      where: { id: assignmentId }
-    });
+    const assignDoc = await db.collection('assignments').doc(assignmentId).get();
 
-    if (!assignment || assignment.studentId !== session.id || assignment.status === 'COMPLETED') {
+    if (!assignDoc.exists || assignDoc.data()!.studentId !== session.id || assignDoc.data()!.status === 'COMPLETED') {
       return NextResponse.json({ error: 'Invalid operation' }, { status: 400 });
     }
 
-    // Upsert answer
-    const existing = await prisma.answer.findFirst({
-      where: { assignmentId, questionId }
-    });
+    const answerId = `${assignmentId}_${questionId}`;
+    await db.collection('answers').doc(answerId).set({
+      assignmentId,
+      questionId,
+      selectedOption: selectedOption || null,
+      answerText: answerText || null,
+      updatedAt: new Date(),
+    }, { merge: true });
 
-    if (existing) {
-      await prisma.answer.update({
-        where: { id: existing.id },
-        data: { selectedOption: selectedOption || null, answerText: answerText || null }
-      });
-    } else {
-      await prisma.answer.create({
-        data: { assignmentId, questionId, selectedOption: selectedOption || null, answerText: answerText || null }
-      });
+    // Ensure createdAt exists if it's the first time
+    const docRef = db.collection('answers').doc(answerId);
+    const doc = await docRef.get();
+    if (!doc.get('createdAt')) {
+      await docRef.update({ createdAt: new Date() });
     }
 
     return NextResponse.json({ success: true });

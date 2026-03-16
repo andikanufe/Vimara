@@ -6,6 +6,7 @@ const protectedRoutes = ['/admin', '/student'];
 
 export default async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  console.log('[Middleware] Intercepting path:', path);
   
   const isProtectedRoute = protectedRoutes.some(route => path.startsWith(route));
   
@@ -13,30 +14,41 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const session = await getSession();
+  try {
+    const session = await getSession();
+    console.log('[Middleware] Session:', session);
 
-  if (isProtectedRoute && !session) {
-    return NextResponse.redirect(new URL('/', request.nextUrl));
-  }
-
-  if (session && path === '/') {
-    if (session.role === 'ADMIN') {
-      return NextResponse.redirect(new URL('/admin/dashboard', request.nextUrl));
-    } else {
-      return NextResponse.redirect(new URL('/student/dashboard', request.nextUrl));
+    if (isProtectedRoute && !session) {
+      console.log('[Middleware] No session on protected route, redirecting to /');
+      return NextResponse.redirect(new URL('/', request.nextUrl));
     }
-  }
 
-  if (session) {
-    if (path.startsWith('/admin') && session.role !== 'ADMIN') {
-      return NextResponse.redirect(new URL('/student/dashboard', request.nextUrl));
+    if (session && path === '/') {
+      console.log('[Middleware] Session exists on /, redirecting to dashboard');
+      if (session.role === 'ADMIN') {
+        return NextResponse.redirect(new URL('/admin/dashboard', request.nextUrl));
+      } else {
+        return NextResponse.redirect(new URL('/student/dashboard', request.nextUrl));
+      }
     }
-    if (path.startsWith('/student') && session.role !== 'STUDENT') {
-      return NextResponse.redirect(new URL('/admin/dashboard', request.nextUrl));
-    }
-  }
 
-  return NextResponse.next();
+    if (session) {
+      if (path.startsWith('/admin') && session.role !== 'ADMIN') {
+        console.log('[Middleware] Non-admin accessing /admin, redirecting to student dashboard');
+        return NextResponse.redirect(new URL('/student/dashboard', request.nextUrl));
+      }
+      if (path.startsWith('/student') && session.role !== 'STUDENT') {
+        console.log('[Middleware] Non-student accessing /student, redirecting to admin dashboard');
+        return NextResponse.redirect(new URL('/admin/dashboard', request.nextUrl));
+      }
+    }
+
+    console.log('[Middleware] Access granted to', path);
+    return NextResponse.next();
+  } catch (error) {
+    console.error('[Middleware] Error:', error);
+    return NextResponse.next();
+  }
 }
 
 export const config = {

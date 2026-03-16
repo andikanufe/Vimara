@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useUI } from '@/providers/UIProvider';
 
 type Tryout = { id: string; title: string; category: string };
 type PackageCategory = {
@@ -11,6 +12,7 @@ type PackageCategory = {
 type Student = { id: string; name: string; username: string };
 
 export default function PackagesPage() {
+    const { confirm, alert, toast } = useUI();
     const [categories, setCategories] = useState<PackageCategory[]>([]);
     const [allTryouts, setAllTryouts] = useState<Tryout[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
@@ -33,23 +35,31 @@ export default function PackagesPage() {
 
     const fetchData = useCallback(async () => {
         setLoading(true);
-        const [catRes, tryRes, stuRes] = await Promise.all([
-            fetch('/api/admin/packages'),
-            fetch('/api/admin/packages/tryouts-list'),
-            fetch('/api/admin/students'),
-        ]);
-        setCategories(await catRes.json());
-
-        // tryouts-list may not exist, use tryout list from another endpoint
         try {
-            const tryData = await tryRes.json();
-            setAllTryouts(Array.isArray(tryData) ? tryData : []);
-        } catch {
-            setAllTryouts([]);
-        }
+            const [catRes, tryRes, stuRes] = await Promise.all([
+                fetch('/api/admin/packages'),
+                fetch('/api/admin/packages/tryouts-list'),
+                fetch('/api/admin/students'),
+            ]);
 
-        setStudents(await stuRes.json());
-        setLoading(false);
+            if (catRes.ok) setCategories(await catRes.json());
+
+            // tryouts-list may not exist, use tryout list from another endpoint
+            try {
+                if (tryRes.ok) {
+                    const tryData = await tryRes.json();
+                    setAllTryouts(Array.isArray(tryData) ? tryData : []);
+                }
+            } catch {
+                setAllTryouts([]);
+            }
+
+            if (stuRes.ok) setStudents(await stuRes.json());
+        } catch (err) {
+            console.error("Fetch error:", err);
+        } finally {
+            setLoading(false);
+        }
     }, []);
 
     useEffect(() => { fetchData(); }, [fetchData]);
@@ -75,7 +85,8 @@ export default function PackagesPage() {
     };
 
     const handleDeleteCat = async (id: string, name: string) => {
-        if (!confirm(`Hapus kategori "${name}"? Tryout di dalamnya tidak akan dihapus.`)) return;
+        const ok = await confirm('Hapus Kategori?', `Hapus kategori "${name}"? Tryout di dalamnya tidak akan dihapus, hanya dikelompokkan ulang.`, 'danger');
+        if (!ok) return;
 
         await fetch('/api/admin/packages', {
             method: 'DELETE',
@@ -99,17 +110,24 @@ export default function PackagesPage() {
     };
 
     const handleRemoveTryout = async (tryoutId: string) => {
+        const ok = await confirm('Keluarkan?', 'Keluarkan tryout ini dari kategori?', 'danger');
+        if (!ok) return;
         await fetch('/api/admin/packages/tryouts', {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tryoutId }),
         });
         await fetchData();
+        toast('Tryout dikeluarkan', 'info');
     };
 
     const handleBulkAssign = async (catId: string) => {
         if (!assignStudentId) return;
         setAssignResult('');
+
+        const student = students.find(s => s.id === assignStudentId);
+        const ok = await confirm('Assign Paket?', `Tugaskan semua tryout di paket ini kepada ${student?.name}?`);
+        if (!ok) return;
 
         const res = await fetch('/api/admin/packages/assign', {
             method: 'POST',
@@ -118,6 +136,11 @@ export default function PackagesPage() {
         });
 
         const data = await res.json();
+        if (res.ok) {
+            toast('Penugasan berhasil', 'success');
+        } else {
+            alert('Gagal', data.error || 'Terjadi kesalahan');
+        }
         setAssignResult(data.message || data.error || 'Selesai');
         setAssignStudentId('');
         setTimeout(() => setAssignResult(''), 4000);

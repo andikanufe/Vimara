@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import MathText from '@/components/MathText';
+import { useUI } from '@/providers/UIProvider';
 
 type QuestionData = {
     id: string;
@@ -14,6 +15,7 @@ type QuestionData = {
     optionD: string | null;
     optionE: string | null;
     correctAnswer: string;
+    pembahasan: string | null;
 };
 
 export default function QuestionForm({
@@ -27,6 +29,7 @@ export default function QuestionForm({
     onCancel?: () => void;
     onSaved?: () => void;
 }) {
+    const { alert, toast } = useUI();
     const isEditing = !!editingQuestion;
     const [questionType, setQuestionType] = useState(editingQuestion?.questionType || 'PG');
     const [correctAnswers, setCorrectAnswers] = useState<string[]>(
@@ -35,10 +38,17 @@ export default function QuestionForm({
             : editingQuestion?.correctAnswer ? [editingQuestion.correctAnswer] : ['A']
     );
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
 
-    const [questionText, setQuestionText] = useState(editingQuestion?.questionText || '');
-    const [imageUrl, setImageUrl] = useState(editingQuestion?.imageUrl || '');
+    // Backward compat: if editingQuestion has imageUrl but questionText doesn't contain [img], prepend it
+    const initQText = (() => {
+        const qt = editingQuestion?.questionText || '';
+        const img = editingQuestion?.imageUrl || '';
+        if (img && !qt.includes('[img]')) return `[img]${img}[/img]\n${qt}`;
+        return qt;
+    })();
+
+    const [questionText, setQuestionText] = useState(initQText);
     const [optionA, setOptionA] = useState(editingQuestion?.optionA || '');
     const [optionB, setOptionB] = useState(editingQuestion?.optionB || '');
     const [optionC, setOptionC] = useState(editingQuestion?.optionC || '');
@@ -47,14 +57,31 @@ export default function QuestionForm({
     const [isianAnswer, setIsianAnswer] = useState(
         editingQuestion?.questionType === 'ISIAN' ? editingQuestion.correctAnswer : ''
     );
+    const [pembahasan, setPembahasan] = useState(editingQuestion?.pembahasan || '');
+    const [customAiPrompt, setCustomAiPrompt] = useState('');
     const [showPreview, setShowPreview] = useState(false);
+    const [aiUsage, setAiUsage] = useState({ count: 0, limit: 20 });
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        try {
+            const stored = JSON.parse(localStorage.getItem('ai_usage_groq') || '{}');
+            const now = Date.now();
+            const twoHours = 2 * 60 * 60 * 1000;
+            if (stored.windowStart && (now - stored.windowStart) < twoHours) {
+                setAiUsage(prev => ({ ...prev, count: stored.count || 0 }));
+            } else {
+                localStorage.setItem('ai_usage_groq', JSON.stringify({ windowStart: now, count: 0 }));
+            }
+        } catch { /* ignore */ }
+    }, []);
 
     useEffect(() => {
         if (editingQuestion) {
             setQuestionType(editingQuestion.questionType);
-            setQuestionText(editingQuestion.questionText);
-            setImageUrl(editingQuestion.imageUrl || '');
+            const qt = editingQuestion.questionText;
+            const img = editingQuestion.imageUrl || '';
+            setQuestionText(img && !qt.includes('[img]') ? `[img]${img}[/img]\n${qt}` : qt);
             setOptionA(editingQuestion.optionA || '');
             setOptionB(editingQuestion.optionB || '');
             setOptionC(editingQuestion.optionC || '');
@@ -68,6 +95,7 @@ export default function QuestionForm({
                         ? []
                         : [editingQuestion.correctAnswer]
             );
+            setPembahasan(editingQuestion.pembahasan || '');
             setShowPreview(false);
         }
     }, [editingQuestion]);
@@ -78,26 +106,47 @@ export default function QuestionForm({
         );
     };
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        setIsUploading(true);
-        const formData = new FormData();
-        formData.append('file', file);
-
+    const handleGenerateAI = async () => {
+        if (!questionText.trim()) {
+            alert('Peringatan', 'Isi soal terlebih dahulu sebelum generate pembahasan AI.');
+            return;
+        }
+        setIsGenerating(true);
         try {
-            const res = await fetch('/api/upload', { method: 'POST', body: formData });
+            const res = await fetch('/api/ai/generate-pembahasan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    questionText: questionText.replace(/\[img\][\s\S]*?\[\/img\]/g, '').trim(),
+                    questionType,
+                    optionA, optionB, optionC, optionD, optionE,
+                    correctAnswer: ['PGK', 'BENAR_SALAH'].includes(questionType)
+                        ? correctAnswers.join(',')
+                        : questionType === 'ISIAN' ? isianAnswer : correctAnswers[0] || 'A',
+                    customPrompt: customAiPrompt.trim()
+                }),
+            });
             const data = await res.json();
-            if (res.ok) {
-                setImageUrl(data.url);
+            if (res.ok && data.pembahasan) {
+                setPembahasan(data.pembahasan);
+                
+                // Update local usage counter (2-hour rolling window)
+                const now = Date.now();
+                const twoHours = 2 * 60 * 60 * 1000;
+                const stored = JSON.parse(localStorage.getItem('ai_usage_groq') || '{}');
+                const inWindow = stored.windowStart && (now - stored.windowStart) < twoHours;
+                const newCount = inWindow ? (stored.count || 0) + 1 : 1;
+                setAiUsage(prev => ({ ...prev, count: newCount }));
+                localStorage.setItem('ai_usage_groq', JSON.stringify({ windowStart: inWindow ? stored.windowStart : now, count: newCount }));
+                
+                toast('Pembahasan berhasil di-generate oleh AI! ✨', 'success');
             } else {
-                alert(data.error || 'Upload gagal');
+                alert('Gagal', data.error || 'AI tidak menghasilkan pembahasan.');
             }
         } catch {
-            alert('Terjadi kesalahan saat upload');
+            alert('Error', 'Gagal menghubungi AI. Cek koneksi internet.');
         } finally {
-            setIsUploading(false);
+            setIsGenerating(false);
         }
     };
 
@@ -105,11 +154,21 @@ export default function QuestionForm({
         e.preventDefault();
         setIsSubmitting(true);
 
+        // Extract first [img] URL for backward compat imageUrl field
+        const imgMatch = questionText.match(/\[img\]([\s\S]*?)\[\/img\]/);
+        let extractedImageUrl: string | null = null;
+        if (imgMatch) {
+            let u = imgMatch[1].trim();
+            const gd = u.match(/(?:file\/d\/|id=|folders\/)([\w-]{25,})/);
+            if (gd && gd[1]) u = `https://drive.google.com/thumbnail?id=${gd[1]}&sz=w1000`;
+            extractedImageUrl = u;
+        }
+        // Store clean questionText (without [img] blocks) for backward compat
         const data: Record<string, unknown> = {
             ...(isEditing ? { id: editingQuestion!.id } : { tryoutId }),
             questionType,
             questionText,
-            imageUrl: imageUrl || null,
+            imageUrl: extractedImageUrl,
             correctAnswer: ['PGK', 'BENAR_SALAH'].includes(questionType)
                 ? correctAnswers.join(',')
                 : questionType === 'ISIAN'
@@ -126,6 +185,8 @@ export default function QuestionForm({
             data.optionE = optionE || null;
         }
 
+        data.pembahasan = pembahasan || null;
+
         try {
             const res = await fetch('/api/tryout/question', {
                 method: isEditing ? 'PUT' : 'POST',
@@ -137,24 +198,27 @@ export default function QuestionForm({
                 if (!isEditing) {
                     setQuestionText(''); setOptionA(''); setOptionB('');
                     setOptionC(''); setOptionD(''); setOptionE('');
-                    setImageUrl(''); setIsianAnswer('');
+                    setIsianAnswer(''); setPembahasan('');
                     setQuestionType('PG'); setCorrectAnswers(['A']);
                     setShowPreview(false);
+                    toast('Soal berhasil ditambahkan', 'success');
+                } else {
+                    toast('Perubahan disimpan', 'success');
                 }
                 if (onSaved) onSaved();
                 else window.location.reload();
             } else {
-                alert('Gagal menyimpan soal');
+                alert('Gagal', 'Gagal menyimpan soal');
             }
         } catch {
-            alert('Terjadi kesalahan jaringan');
+            alert('Error', 'Terjadi kesalahan jaringan');
         } finally {
             setIsSubmitting(false);
         }
     };
 
     const hasContent = questionText.length > 0 || optionA.length > 0;
-    const hasLatex = [questionText, optionA, optionB, optionC, optionD, optionE].some(t => t.includes('$'));
+    const hasSpecial = [questionText, optionA, optionB, optionC, optionD, optionE, pembahasan].some(t => t.includes('$') || t.includes('['));
 
     return (
         <div className="card" style={{ borderLeft: isEditing ? '3px solid var(--warning)' : undefined }}>
@@ -180,11 +244,6 @@ export default function QuestionForm({
             {showPreview && hasContent && (
                 <div style={{ marginBottom: '1.5rem', padding: '1.25rem', backgroundColor: 'var(--bg-color)', borderRadius: 'var(--radius)', border: '1px dashed var(--border)' }}>
                     <div className="text-xs font-bold text-muted" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem' }}>📐 Preview Output</div>
-                    {imageUrl && (
-                        <div style={{ marginBottom: '1rem' }}>
-                            <img src={imageUrl} alt="Soal" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }} />
-                        </div>
-                    )}
                     <div style={{ marginBottom: '1rem', fontWeight: 600, lineHeight: 1.7 }}>
                         <MathText text={questionText} />
                     </div>
@@ -238,8 +297,15 @@ export default function QuestionForm({
 
             <form onSubmit={handleSubmit}>
                 {!showPreview && (
-                    <div style={{ marginBottom: '1rem', padding: '0.75rem 1rem', fontSize: '0.8125rem', backgroundColor: 'hsl(210, 100%, 97%)', borderRadius: 'var(--radius-sm)', color: 'hsl(210, 60%, 40%)', border: '1px solid hsl(210, 80%, 90%)', lineHeight: 1.5 }}>
-                        💡 <strong>Tips LaTeX:</strong> <code>$...$</code> untuk rumus (contoh: <code>$x^2$</code>), <code>$\frac&#123;a&#125;&#123;b&#125;$</code> pecahan, <code>$\sqrt&#123;x&#125;$</code> akar
+                    <div style={{ marginBottom: '1rem', padding: '0.75rem 1rem', fontSize: '0.8125rem', backgroundColor: 'hsl(210, 100%, 97%)', borderRadius: 'var(--radius-sm)', color: 'hsl(210, 60%, 40%)', border: '1px solid hsl(210, 80%, 90%)', lineHeight: 1.7 }}>
+                        <strong>📌 Panduan Format:</strong>
+                        <div style={{ marginTop: '0.375rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                            <span>🔢 <strong>LaTeX:</strong> <code>$x^2$</code> inline, <code>$$\frac{'{'} a{'}'}{'{'}b{'}'}$$</code> display</span>
+                            <span>📊 <strong>Tabel:</strong> <code>[table]Kol1|Kol2\nData1|Data2[/table]</code></span>
+                            <span>🐍 <strong>Python:</strong> <code>[python]import matplotlib...plt.show()[/python]</code></span>
+                            <span>📐 <strong>TikZ:</strong> <code>[tikz]\begin{'{'}tikzpicture{'}'}...\end{'{'}tikzpicture{'}'}[/tikz]</code></span>
+                            <span>🖼️ <strong>Gambar:</strong> <code>[img]link-google-drive-atau-url[/img]</code></span>
+                        </div>
                     </div>
                 )}
 
@@ -275,37 +341,17 @@ export default function QuestionForm({
                 {/* Question Text */}
                 <div className="form-group">
                     <label className="form-label" htmlFor="questionText">Pertanyaan / Isi Soal</label>
-                    <textarea id="questionText" name="questionText" className="form-input" rows={3} required
+                    <textarea id="questionText" name="questionText" className="form-input" rows={4} required
                         value={questionText} onChange={(e) => setQuestionText(e.target.value)}
-                        placeholder="Contoh: Berapakah hasil dari $\frac{d}{dx}(x^2)$ ?"
+                        placeholder={`Contoh: Berapakah hasil dari $\\frac{d}{dx}(x^2)$ ?\n\nUntuk gambar: [img]https://drive.google.com/file/d/...[/img]`}
+                        style={{ fontFamily: 'monospace', fontSize: '0.875rem' }}
                     />
-                    {hasLatex && !showPreview && questionText && (
+                    {hasSpecial && !showPreview && questionText && (
                         <div style={{ marginTop: '0.5rem', padding: '0.5rem 0.75rem', backgroundColor: 'var(--bg-color)', borderRadius: 'var(--radius-sm)', fontSize: '0.875rem' }}>
                             <span className="text-xs text-muted" style={{ display: 'block', marginBottom: '0.25rem' }}>Preview:</span>
                             <MathText text={questionText} />
                         </div>
                     )}
-                </div>
-
-                {/* Image Upload */}
-                <div className="form-group">
-                    <label className="form-label">Gambar Soal (opsional)</label>
-                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                        {imageUrl && (
-                            <div style={{ position: 'relative' }}>
-                                <img src={imageUrl} alt="Preview" style={{ width: '120px', height: '80px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }} />
-                                <button type="button" onClick={() => setImageUrl('')}
-                                    style={{ position: 'absolute', top: '-6px', right: '-6px', width: '20px', height: '20px', borderRadius: '50%', background: 'var(--danger)', color: 'white', border: 'none', fontSize: '0.7rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
-                            </div>
-                        )}
-                        <div>
-                            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
-                            <button type="button" className="btn btn-outline btn-sm" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
-                                {isUploading ? '⏳ Mengupload...' : '📷 Upload Gambar'}
-                            </button>
-                            <div className="text-xs text-muted" style={{ marginTop: '0.25rem' }}>Max 5MB · JPEG, PNG, WebP, GIF</div>
-                        </div>
-                    </div>
                 </div>
 
                 {/* Options (PG / PGK / BENAR_SALAH) */}
@@ -419,6 +465,54 @@ export default function QuestionForm({
                         <div className="text-xs text-muted" style={{ marginTop: '0.25rem' }}>Jawaban siswa akan dicocokkan secara case-insensitive (huruf besar/kecil diabaikan)</div>
                     </div>
                 )}
+
+                {/* Pembahasan */}
+                <div className="form-group" style={{ marginTop: '1.5rem', padding: '1.25rem', backgroundColor: 'hsl(270, 50%, 98%)', borderRadius: 'var(--radius)', border: '1px solid hsl(270, 40%, 90%)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                            📖 Pembahasan Soal <span className="text-xs text-muted">(Opsional)</span>
+                        </label>
+                        <button
+                            type="button"
+                            className="btn btn-sm"
+                            style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: '0.375rem' }}
+                            onClick={handleGenerateAI}
+                            disabled={isGenerating || !questionText.trim() || aiUsage.count >= aiUsage.limit}
+                            title={`${aiUsage.count}/${aiUsage.limit} generate dalam 2 jam terakhir`}
+                        >
+                            {isGenerating ? '⏳ Generating...' : `✨ Generate AI (${aiUsage.count}/${aiUsage.limit})`}
+                        </button>
+                    </div>
+
+                    <div style={{ marginBottom: '1rem' }}>
+                        <label className="form-label" style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                            Instruksi Khusus untuk AI (Revisi/Prompt Opsional)
+                        </label>
+                        <textarea
+                            className="form-input"
+                            rows={2}
+                            value={customAiPrompt}
+                            onChange={(e) => setCustomAiPrompt(e.target.value)}
+                            placeholder="Contoh: 'Buat penjelasan lebih singkat', 'Fokus pada rumus XYZ', 'Jangan pakai garis bilangan Python'..."
+                            style={{ fontSize: '0.8125rem', borderColor: 'hsl(270, 40%, 80%)' }}
+                        />
+                    </div>
+
+                    <textarea
+                        className="form-input"
+                        rows={4}
+                        value={pembahasan}
+                        onChange={(e) => setPembahasan(e.target.value)}
+                        placeholder="Tuliskan pembahasan soal atau klik 'Generate AI' memuat pembahasan otomatis..."
+                        style={{ fontFamily: 'monospace', fontSize: '0.875rem' }}
+                    />
+                    {pembahasan && (
+                        <div style={{ marginTop: '0.75rem', padding: '0.75rem 1rem', backgroundColor: 'white', borderRadius: 'var(--radius-sm)', border: '1px solid hsl(270, 40%, 90%)' }}>
+                            <span className="text-xs text-muted" style={{ display: 'block', marginBottom: '0.5rem' }}>Preview Pembahasan:</span>
+                            <div style={{ lineHeight: 1.7 }}><MathText text={pembahasan} /></div>
+                        </div>
+                    )}
+                </div>
 
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                     <button type="submit" className={`btn ${isEditing ? 'btn-warning' : 'btn-primary'}`} style={{ flex: 1 }}

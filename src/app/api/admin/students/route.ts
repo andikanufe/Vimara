@@ -1,16 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/firebase-admin';
 
 // GET — list all students with assignment counts
 export async function GET() {
-    const students = await prisma.user.findMany({
-        where: { role: 'STUDENT' },
-        orderBy: { createdAt: 'desc' },
-        include: {
-            _count: { select: { assignments: true } }
-        }
+    const snapshot = await db.collection('users').where('role', '==', 'STUDENT').get();
+    const sortedDocs = snapshot.docs.sort((a, b) => {
+        const dateA = a.data().createdAt?.toDate?.() || new Date(0);
+        const dateB = b.data().createdAt?.toDate?.() || new Date(0);
+        return dateB.getTime() - dateA.getTime();
     });
+
+    const students = await Promise.all(sortedDocs.map(async (doc) => {
+        const data = doc.data();
+        const assignmentsSnap = await db.collection('assignments').where('studentId', '==', doc.id).count().get();
+        return {
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
+            updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
+            _count: { assignments: assignmentsSnap.data().count }
+        };
+    }));
 
     return NextResponse.json(students);
 }
@@ -24,17 +35,32 @@ export async function POST(req: NextRequest) {
     }
 
     // Check uniqueness
-    const existing = await prisma.user.findUnique({ where: { username } });
-    if (existing) {
+    const existing = await db.collection('users').where('username', '==', username).limit(1).get();
+    if (!existing.empty) {
         return NextResponse.json({ error: 'Username sudah digunakan' }, { status: 409 });
     }
 
-    const student = await prisma.user.create({
-        data: { username, password, name, role: 'STUDENT' },
-        include: { _count: { select: { assignments: true } } }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const now = new Date();
+    const docRef = await db.collection('users').add({
+        username,
+        password: hashedPassword,
+        name,
+        role: 'STUDENT',
+        createdAt: now,
+        updatedAt: now,
     });
 
-    return NextResponse.json(student, { status: 201 });
+    const doc = await docRef.get();
+    const data = doc.data()!;
+
+    return NextResponse.json({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString(),
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString(),
+        _count: { assignments: 0 }
+    }, { status: 201 });
 }
 
 // PUT — update student
@@ -47,29 +73,33 @@ export async function PUT(req: NextRequest) {
 
     // Check if username is taken by another user
     if (username) {
-        const existing = await prisma.user.findFirst({
-            where: { username, NOT: { id } }
-        });
-        if (existing) {
+        const existing = await db.collection('users').where('username', '==', username).limit(1).get();
+        if (!existing.empty && existing.docs[0].id !== id) {
             return NextResponse.json({ error: 'Username sudah digunakan' }, { status: 409 });
         }
     }
 
-    const updateData: Record<string, string> = {};
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (username) updateData.username = username;
-    if (password) updateData.password = password;
+    if (password) updateData.password = await bcrypt.hash(password, 10);
     if (name) updateData.name = name;
 
-    const student = await prisma.user.update({
-        where: { id },
-        data: updateData,
-        include: { _count: { select: { assignments: true } } }
-    });
+    await db.collection('users').doc(id).update(updateData);
 
-    return NextResponse.json(student);
+    const doc = await db.collection('users').doc(id).get();
+    const data = doc.data()!;
+    const assignmentsSnap = await db.collection('assignments').where('studentId', '==', id).count().get();
+
+    return NextResponse.json({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString(),
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString(),
+        _count: { assignments: assignmentsSnap.data().count }
+    });
 }
 
-// DELETE — delete student
+// DELETE — delete student (and their assignments)
 export async function DELETE(req: NextRequest) {
     const { id } = await req.json();
 
@@ -77,6 +107,17 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json({ error: 'ID wajib diisi' }, { status: 400 });
     }
 
-    await prisma.user.delete({ where: { id } });
+    // Delete all assignments for this student (and their answers)
+    const assignmentsSnap = await db.collection('assignments').where('studentId', '==', id).get();
+    const batch = db.batch();
+    for (const assignDoc of assignmentsSnap.docs) {
+        // Delete answers for each assignment
+        const answersSnap = await db.collection('answers').where('assignmentId', '==', assignDoc.id).get();
+        answersSnap.forEach(a => batch.delete(a.ref));
+        batch.delete(assignDoc.ref);
+    }
+    batch.delete(db.collection('users').doc(id));
+    await batch.commit();
+
     return NextResponse.json({ success: true });
 }

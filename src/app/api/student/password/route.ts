@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/firebase-admin';
 import bcrypt from 'bcryptjs';
 
 export async function PUT(req: Request) {
@@ -18,9 +18,9 @@ export async function PUT(req: Request) {
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        await prisma.user.update({
-            where: { id: session.id },
-            data: { password: hashedPassword }
+        await db.collection('users').doc(session.id).update({
+            password: hashedPassword,
+            updatedAt: new Date()
         });
 
         return NextResponse.json({ message: 'Password berhasil diperbarui' });

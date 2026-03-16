@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import MathText from '@/components/MathText';
 import QuestionForm from './QuestionForm';
+import { useUI } from '@/providers/UIProvider';
 
 type QuestionData = {
     id: string;
@@ -15,6 +16,7 @@ type QuestionData = {
     optionD: string | null;
     optionE: string | null;
     correctAnswer: string;
+    pembahasan: string | null;
 };
 
 export default function QuestionList({
@@ -24,6 +26,7 @@ export default function QuestionList({
     tryoutId: string;
     initialQuestions: QuestionData[];
 }) {
+    const { confirm, alert, toast } = useUI();
     const [questions, setQuestions] = useState<QuestionData[]>(initialQuestions);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -41,7 +44,8 @@ export default function QuestionList({
     const handleSaved = () => { setEditingId(null); fetchQuestions(); };
 
     const handleDelete = async (questionId: string) => {
-        if (!confirm('Apakah Anda yakin ingin menghapus soal ini?')) return;
+        const ok = await confirm('Hapus Soal?', 'Apakah Anda yakin ingin menghapus soal ini? Tindakan ini tidak dapat dibatalkan.', 'danger');
+        if (!ok) return;
         setDeletingId(questionId);
         try {
             const res = await fetch('/api/tryout/question', {
@@ -51,8 +55,9 @@ export default function QuestionList({
             });
             if (res.ok) {
                 setQuestions(prev => prev.filter(q => q.id !== questionId));
-            } else { alert('Gagal menghapus soal'); }
-        } catch { alert('Terjadi kesalahan jaringan'); }
+                toast('Soal berhasil dihapus', 'success');
+            } else { alert('Gagal', 'Gagal menghapus soal'); }
+        } catch { alert('Error', 'Terjadi kesalahan jaringan'); }
         finally { setDeletingId(null); }
     };
 
@@ -98,6 +103,9 @@ export default function QuestionList({
                                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                         <span className="text-muted font-semibold text-sm">#{idx + 1}</span>
                                         <span className={`badge ${typeBadge(q.questionType)}`}>{typeLabel(q.questionType)}</span>
+                                        {q.pembahasan && (
+                                            <span className="badge" style={{ background: '#e0e7ff', color: '#4338ca', border: '1px solid #c7d2fe' }}>✨ Pembahasan</span>
+                                        )}
                                     </div>
                                     <div style={{ display: 'flex', gap: '0.375rem', flexShrink: 0 }}>
                                         <button className="btn btn-outline btn-sm" onClick={() => handleEdit(q)} disabled={isBeingDeleted}

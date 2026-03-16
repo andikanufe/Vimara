@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/firebase-admin';
 import { getSession } from '@/lib/auth';
 import * as XLSX from 'xlsx';
 
@@ -10,26 +10,59 @@ export async function GET() {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const tryouts = await prisma.tryout.findMany({ orderBy: { title: 'asc' } });
-        const students = await prisma.user.findMany({
-            where: { role: 'STUDENT' },
-            include: {
-                assignments: {
-                    where: { status: 'COMPLETED' },
-                    include: { tryout: true }
-                }
-            },
-            orderBy: { name: 'asc' }
-        });
+        const tryoutsSnap = await db.collection('tryouts').get();
+        const tryouts = tryoutsSnap.docs
+            .map(t => ({ id: t.id, ...t.data() }))
+            .sort((a: any, b: any) => (a.title || '').localeCompare(b.title || ''));
 
+        const studentsSnap = await db.collection('users').where('role', '==', 'STUDENT').get();
+        const studentDocs = studentsSnap.docs.sort((a, b) => (a.data().name || '').localeCompare(b.data().name || ''));
+
+        const students = await Promise.all(studentDocs.map(async (doc) => {
+            const assignSnap = await db.collection('assignments')
+                .where('studentId', '==', doc.id)
+                .where('status', '==', 'COMPLETED')
+                .get();
+
+            const assignments = assignSnap.docs.map(a => ({
+                id: a.id,
+                ...a.data(),
+                tryout: tryouts.find(t => t.id === a.data().tryoutId)
+            }));
+
+            return {
+                id: doc.id,
+                ...doc.data(),
+                assignments
+            };
+        }));
+
+        const detailHeaders = ['No', 'Nama', 'Tryout', 'Skor', 'Waktu Mulai', 'Waktu Selesai'];
+        const detailRows: any[] = [];
+        let detailIdx = 1;
+        students.forEach((s: any) => {
+            s.assignments.forEach((a: any) => {
+                if (a.status === 'COMPLETED') {
+                    const tryout = tryouts.find((t: any) => t.id === a.tryoutId);
+                    detailRows.push([
+                        detailIdx++,
+                        s.name,
+                        (tryout as any) ? (tryout as any).title : 'Unknown',
+                        Number(a.score) || 0,
+                        a.startedAt ? new Date(a.startedAt).toLocaleString('id-ID') : '-',
+                        a.completedAt ? new Date(a.completedAt).toLocaleString('id-ID') : '-'
+                    ]);
+                }
+            });
+        });
         const wb = XLSX.utils.book_new();
 
         // Sheet: All Student Scores
-        const headers = ['No', 'Nama', 'Username', ...tryouts.map(t => t.title), 'Rata-rata'];
-        const rows = students.map((s, idx) => {
-            const scores = tryouts.map(t => {
-                const a = s.assignments.find(a => a.tryoutId === t.id);
-                return a?.score !== undefined && a?.score !== null ? Number(a.score.toFixed(1)) : '-';
+        const headers = ['No', 'Nama', 'Username', ...tryouts.map((t: any) => t.title as string), 'Rata-rata'];
+        const rows = students.map((s: any, idx: any) => {
+            const scores = tryouts.map((t: any) => {
+                const asg = s.assignments.find((a: any) => a.tryoutId === t.id);
+                return asg && asg.status === 'COMPLETED' && asg.score !== undefined && asg.score !== null ? Number((asg.score as number).toFixed(1)) : '-';
             });
             const numScores = scores.filter(s => typeof s === 'number') as number[];
             const avg = numScores.length > 0 ? (numScores.reduce((a, b) => a + b, 0) / numScores.length).toFixed(1) : '-';
@@ -40,7 +73,7 @@ export async function GET() {
 
         // Auto-width columns
         const colWidths = headers.map((h, i) => {
-            const maxLen = Math.max(h.length, ...rows.map(r => String(r[i]).length));
+            const maxLen = Math.max(String(h).length, ...rows.map(r => String(r[i]).length));
             return { wch: maxLen + 2 };
         });
         ws['!cols'] = colWidths;

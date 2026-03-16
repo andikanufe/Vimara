@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/firebase-admin';
 import { getSession } from '@/lib/auth';
 
 export async function POST(request: Request) {
@@ -11,61 +11,74 @@ export async function POST(request: Request) {
 
     const { assignmentId } = await request.json();
 
-    const assignment = await prisma.assignment.findUnique({
-      where: { id: assignmentId },
-      include: {
-        answers: true,
-        tryout: {
-          include: { questions: true }
-        }
-      }
-    });
+    const assignDoc = await db.collection('assignments').doc(assignmentId).get();
 
-    if (!assignment || assignment.studentId !== session.id || assignment.status === 'COMPLETED') {
+    if (!assignDoc.exists || assignDoc.data()!.studentId !== session.id || assignDoc.data()!.status === 'COMPLETED') {
       return NextResponse.json({ error: 'Invalid operation' }, { status: 400 });
     }
 
+    const assignment = assignDoc.data()!;
+    const tryoutId = assignment.tryoutId;
+
+    // Get answers
+    const answersSnap = await db.collection('answers').where('assignmentId', '==', assignmentId).get();
+    const answers = answersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // Get questions
+    const questionsSnap = await db.collection('questions').where('tryoutId', '==', tryoutId).get();
+    const questions = questionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
     // Calculate score (PG, PGK, ISIAN)
-    const totalQuestions = assignment.tryout.questions.length;
+    const totalQuestions = questions.length;
     let correctAnswers = 0;
 
     if (totalQuestions > 0) {
-      assignment.tryout.questions.forEach(question => {
-        const studentAnswer = assignment.answers.find(a => a.questionId === question.id);
+      questions.forEach((question: any) => {
+        const studentAnswer = answers.find((a: any) => a.questionId === question.id);
         if (!studentAnswer) return;
 
-        const qType = (question as Record<string, unknown>).questionType as string;
+        const qType = question.questionType as string;
 
-        if (qType === 'PGK') {
-          const correctSet = question.correctAnswer.split(',').sort().join(',');
-          const studentSet = (studentAnswer.selectedOption || '').split(',').sort().join(',');
-          if (correctSet === studentSet) correctAnswers++;
+        let isCorrect = false;
+
+        if (qType === 'PILIHAN_GANDA') {
+          isCorrect = (studentAnswer as any).selectedOption === question.correctAnswer;
         } else if (qType === 'ISIAN') {
-          // Case-insensitive trimmed comparison
-          const correct = question.correctAnswer.trim().toLowerCase();
-          const student = ((studentAnswer as Record<string, unknown>).answerText as string || '').trim().toLowerCase();
-          if (correct === student) correctAnswers++;
-        } else {
-          // PG
-          if (studentAnswer.selectedOption === question.correctAnswer) correctAnswers++;
+          const ansText = ((studentAnswer as any).answerText || '').trim().toLowerCase();
+          const correctText = (question.correctAnswer || '').trim().toLowerCase();
+          isCorrect = ansText === correctText;
+        } else if (qType === 'PGK') {
+          const correctSet = String(question.correctAnswer).split(',').sort().join(',');
+          const studentSet = String((studentAnswer as any).selectedOption || '').split(',').sort().join(',');
+          isCorrect = correctSet === studentSet;
+        } else if (qType === 'BENAR_SALAH') {
+          const options = [question.optionA, question.optionB, question.optionC, question.optionD, question.optionE];
+          const lastIdx = options.reduce((acc, opt, i) => (opt && opt.trim() !== '' ? i : acc), 0);
+          
+          const correctArr = String(question.correctAnswer).split(',').slice(0, lastIdx + 1);
+          const studentArr = String((studentAnswer as any).selectedOption || '').split(',').slice(0, lastIdx + 1);
+          
+          isCorrect = correctArr.join(',') === studentArr.join(',');
+        }
+
+        if (isCorrect) {
+          correctAnswers++;
         }
       });
     }
 
     const finalScore = totalQuestions > 0 ? (correctAnswers / totalQuestions) * 100 : 0;
 
-    await prisma.assignment.update({
-      where: { id: assignmentId },
-      data: {
-        status: 'COMPLETED',
-        score: finalScore,
-        endTime: new Date()
-      }
+    await assignDoc.ref.update({
+      status: 'COMPLETED',
+      score: finalScore,
+      endTime: new Date(),
+      updatedAt: new Date(),
     });
 
     return NextResponse.json({
       success: true,
-      redirect: `/student/tryouts/${assignment.tryoutId}/result`
+      redirect: `/student/tryouts/${tryoutId}/result`
     });
   } catch (error) {
     console.error('Finish API Error:', error);

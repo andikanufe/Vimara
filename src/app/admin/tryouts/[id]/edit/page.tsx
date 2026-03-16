@@ -1,20 +1,20 @@
 import { notFound, redirect } from 'next/navigation';
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/firebase-admin';
 import Link from 'next/link';
+
+export const dynamic = 'force-dynamic';
 
 export default async function EditTryoutPage({ params }: { params: Promise<{ id: string }> }) {
     const tryoutId = (await params).id;
 
-    const tryout = await prisma.tryout.findUnique({
-        where: { id: tryoutId },
-        include: { packageCategory: true }
-    });
+    const tryoutDoc = await db.collection('tryouts').doc(tryoutId).get();
 
-    if (!tryout) return notFound();
+    if (!tryoutDoc.exists) return notFound();
 
-    const packageCategories = await prisma.packageCategory.findMany({
-        orderBy: { name: 'asc' }
-    });
+    const tryout = tryoutDoc.data()!;
+
+    const packageCategoriesSnap = await db.collection('packageCategories').orderBy('name', 'asc').get();
+    const packageCategories = packageCategoriesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
     async function updateTryout(formData: FormData) {
         'use server';
@@ -27,10 +27,11 @@ export default async function EditTryoutPage({ params }: { params: Promise<{ id:
         const categoryId = (formData.get('categoryId') as string) || null;
         const pdfLink = (formData.get('pdfLink') as string) || null;
         const youtubeLink = (formData.get('youtubeLink') as string) || null;
+        const randomizeQuestions = formData.get('randomizeQuestions') === 'on';
 
-        await prisma.tryout.update({
-            where: { id: tryoutId },
-            data: { title, category, description, duration, categoryId, pdfLink, youtubeLink },
+        await db.collection('tryouts').doc(tryoutId).update({
+            title, category, description, duration, categoryId, pdfLink, youtubeLink, randomizeQuestions,
+            updatedAt: new Date()
         });
 
         redirect(`/admin/tryouts/${tryoutId}`);
@@ -41,8 +42,8 @@ export default async function EditTryoutPage({ params }: { params: Promise<{ id:
     const tTitle = tryout.title as string;
     const tDesc = tryout.description as string | undefined;
     const tCatId = tryout.categoryId as string | undefined;
-    const tPdf = (tryout as Record<string, unknown>).pdfLink as string | undefined;
-    const tYt = (tryout as Record<string, unknown>).youtubeLink as string | undefined;
+    const tPdf = tryout.pdfLink as string | undefined;
+    const tYt = tryout.youtubeLink as string | undefined;
 
     return (
         <div className="animate-in">
@@ -76,9 +77,11 @@ export default async function EditTryoutPage({ params }: { params: Promise<{ id:
                             defaultValue={tryoutCategory}
                             required
                         >
-                            <option value="UTBK">UTBK / SNBT</option>
-                            <option value="CPNS">CPNS / Kedinasan</option>
-                            <option value="TKA">TKA (Saintek/Soshum)</option>
+                            <option value="Matematika Wajib">Matematika Wajib</option>
+                            <option value="Matematika Lanjut">Matematika Lanjut</option>
+                            <option value="PK">PK</option>
+                            <option value="PM">PM</option>
+                            <option value="TIU">TIU</option>
                             <option value="LAINNYA">Lainnya</option>
                         </select>
                     </div>
@@ -93,8 +96,8 @@ export default async function EditTryoutPage({ params }: { params: Promise<{ id:
                                 defaultValue={tCatId || ''}
                             >
                                 <option value="">-- Tanpa Paket --</option>
-                                {packageCategories.map(pc => (
-                                    <option key={pc.id} value={pc.id}>{pc.name}</option>
+                                {packageCategories.map((pc: any) => (
+                                    <option key={pc.id} value={pc.id}>{pc.name as string}</option>
                                 ))}
                             </select>
                         </div>
@@ -146,6 +149,22 @@ export default async function EditTryoutPage({ params }: { params: Promise<{ id:
                             min={1}
                             max={600}
                         />
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                name="randomizeQuestions"
+                                defaultChecked={tryout.randomizeQuestions === true}
+                                className="w-4 h-4 rounded"
+                                style={{ width: '1rem', height: '1rem' }}
+                            />
+                            <span className="text-sm font-medium" style={{ marginLeft: '0.5rem' }}>Acak Urutan Soal untuk Siswa</span>
+                        </label>
+                        <div className="text-xs text-muted" style={{ marginTop: '0.25rem', marginLeft: '1.5rem' }}>
+                            Jika dicentang, urutan soal akan diacak setiap kali siswa mengerjakan. Matikan jika soal harus berurutan.
+                        </div>
                     </div>
 
                     <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>

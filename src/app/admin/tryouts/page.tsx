@@ -1,13 +1,29 @@
-import prisma from '@/lib/prisma';
+import { db } from '@/lib/firebase-admin';
 import Link from 'next/link';
+import DeleteTryoutBtn from './DeleteTryoutBtn';
+
+export const dynamic = 'force-dynamic';
 
 export default async function TryoutsPage() {
-  const tryouts = await prisma.tryout.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: {
-      _count: { select: { questions: true, assignments: true } }
-    }
+  const tryoutsSnap = await db.collection('tryouts').get();
+  const tryoutsDocs = tryoutsSnap.docs.sort((a, b) => {
+    const dateA = a.data().createdAt?.toDate?.() || new Date(0);
+    const dateB = b.data().createdAt?.toDate?.() || new Date(0);
+    return dateB.getTime() - dateA.getTime();
   });
+
+  const tryouts = await Promise.all(tryoutsDocs.map(async (doc) => {
+    const qCountSnap = await db.collection('questions').where('tryoutId', '==', doc.id).count().get();
+    const aCountSnap = await db.collection('assignments').where('tryoutId', '==', doc.id).count().get();
+    return {
+      id: doc.id,
+      ...doc.data(),
+      _count: {
+        questions: qCountSnap.data().count,
+        assignments: aCountSnap.data().count
+      }
+    };
+  }));
 
   return (
     <div className="animate-in">
@@ -34,15 +50,15 @@ export default async function TryoutsPage() {
               </tr>
             </thead>
             <tbody>
-              {tryouts.map((tryout) => {
-                const dur = (tryout as Record<string, unknown>).duration as number | null;
+              {tryouts.map((tryout: any) => {
+                const dur = tryout.duration as number | null;
                 return (
                   <tr key={tryout.id}>
                     <td>
-                      <div style={{ fontWeight: 500 }}>{tryout.title}</div>
-                      {tryout.description && <div className="text-muted text-sm">{tryout.description}</div>}
+                      <div style={{ fontWeight: 500 }}>{tryout.title as string}</div>
+                      {tryout.description && <div className="text-muted text-sm">{tryout.description as string}</div>}
                     </td>
-                    <td><span className="badge badge-primary">{tryout.category}</span></td>
+                    <td><span className="badge badge-primary">{tryout.category as string}</span></td>
                     <td>{tryout._count.questions}</td>
                     <td>
                       {dur ? (
@@ -57,9 +73,7 @@ export default async function TryoutsPage() {
                         <Link href={`/admin/tryouts/${tryout.id}`} className="btn btn-outline btn-sm">
                           Detail / Soal
                         </Link>
-                        <Link href={`/admin/tryouts/${tryout.id}/assign`} className="btn btn-primary btn-sm">
-                          Tugaskan
-                        </Link>
+                        <DeleteTryoutBtn tryoutId={tryout.id} tryoutTitle={tryout.title as string} />
                       </div>
                     </td>
                   </tr>

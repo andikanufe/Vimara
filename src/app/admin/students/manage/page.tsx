@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useUI } from '@/providers/UIProvider';
 
 type Student = {
     id: string;
@@ -30,6 +31,7 @@ type Tryout = { id: string; title: string; category: string; categoryId: string 
 type PackageCategory = { id: string; name: string; tryouts: { id: string; title: string }[] };
 
 export default function ManageStudentsPage() {
+    const { confirm, alert, toast } = useUI();
     const [students, setStudents] = useState<Student[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
@@ -52,10 +54,17 @@ export default function ManageStudentsPage() {
 
     const fetchStudents = useCallback(async () => {
         setLoading(true);
-        const res = await fetch('/api/admin/students');
-        const data = await res.json();
-        setStudents(data);
-        setLoading(false);
+        try {
+            const res = await fetch('/api/admin/students');
+            if (res.ok) {
+                const data = await res.json();
+                setStudents(Array.isArray(data) ? data : []);
+            }
+        } catch (err) {
+            console.error("Fetch students error:", err);
+        } finally {
+            setLoading(false);
+        }
     }, []);
 
     useEffect(() => { fetchStudents(); }, [fetchStudents]);
@@ -148,7 +157,8 @@ export default function ManageStudentsPage() {
     };
 
     const handleDelete = async (id: string, name: string) => {
-        if (!confirm(`Hapus siswa "${name}"? Semua data tryout siswa ini akan dihapus.`)) return;
+        const ok = await confirm('Hapus Siswa?', `Hapus siswa "${name}"? Semua data tryout siswa ini akan dihapus permanen.`, 'danger');
+        if (!ok) return;
 
         await fetch('/api/admin/students', {
             method: 'DELETE',
@@ -196,7 +206,8 @@ export default function ManageStudentsPage() {
 
     const handleRemoveAssignment = async (assignmentId: string) => {
         if (!expandedStudentId) return;
-        if (!confirm('Hapus penugasan ini?')) return;
+        const ok = await confirm('Hapus Penugasan?', 'Apakah Anda yakin ingin menghapus penugasan ini?', 'danger');
+        if (!ok) return;
 
         await fetch(`/api/admin/students/${expandedStudentId}`, {
             method: 'DELETE',
@@ -208,7 +219,8 @@ export default function ManageStudentsPage() {
 
     const handleRemovePackage = async (catId: string, catName: string) => {
         if (!expandedStudentId) return;
-        if (!confirm(`Hapus semua penugasan paket "${catName}" dari siswa ini? Hanya penugasan berstatus PENDING yang akan dihapus.`)) return;
+        const ok = await confirm('Hapus Paket?', `Hapus semua penugasan paket "${catName}" dari siswa ini? Hanya penugasan berstatus PENDING yang akan dihapus.`, 'danger');
+        if (!ok) return;
 
         await fetch(`/api/admin/students/${expandedStudentId}`, {
             method: 'DELETE',
