@@ -17,8 +17,9 @@ export function PrintWatermark({ userName, userEmail }: { userName?: string, use
     );
 }
 
-export default function PrintClientHelper() {
+export default function PrintClientHelper({ tryoutId }: { tryoutId?: string }) {
     const [isReady, setIsReady] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
 
     useEffect(() => {
         // Polling to check if all dynamic content is ready
@@ -27,6 +28,7 @@ export default function PrintClientHelper() {
 
         const checkReady = setInterval(() => {
             const allImages = Array.from(document.querySelectorAll('img'));
+            // exclude the vimara-logo if needed, but complete property works for all
             const imagesReady = allImages.every(img => img.complete);
 
             const allGraphs = Array.from(document.querySelectorAll('[data-rendering]'));
@@ -43,8 +45,40 @@ export default function PrintClientHelper() {
         return () => clearInterval(checkReady);
     }, []);
 
-    const handlePrint = () => {
-        window.print();
+    const handlePrint = async () => {
+        setIsGenerating(true);
+        try {
+            // @ts-ignore
+            const html2pdf = (await import('html2pdf.js')).default;
+            const element = document.getElementById('printable-area');
+            
+            if (!element) return;
+
+            // Optional: temporarily adjust styles on printable-area if needed 
+            // html2pdf does this reasonably well with windowWidth, but we can enforce some defaults
+            
+            const opt = {
+                margin:       [0.5, 0.5, 0.5, 0.5] as [number, number, number, number], // top, left, bottom, right in inches
+                filename:     `LBS_${tryoutId || 'Tryout'}_${new Date().getTime()}.pdf`,
+                image:        { type: 'jpeg' as const, quality: 0.98 },
+                html2canvas:  { 
+                    scale: 2, 
+                    useCORS: true, 
+                    windowWidth: 1024, // Ensures layout looks like desktop
+                    ignoreElements: (el: Element) => el.classList?.contains('no-print')
+                },
+                jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const },
+                pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+            };
+
+            await html2pdf().set(opt).from(element).save();
+            
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            alert('Gagal membuat PDF. Silakan coba lagi.');
+        } finally {
+            setIsGenerating(false);
+        }
     };
 
     return (
@@ -53,27 +87,7 @@ export default function PrintClientHelper() {
                 __html: `
                 @media print {
                     .no-print { display: none !important; }
-                    @page {
-                        size: A4 portrait;
-                        margin: 1cm;
-                    }
-                    body {
-                        -webkit-print-color-adjust: exact;
-                        print-color-adjust: exact;
-                        background-color: white !important;
-                    }
-                    #printable-area {
-                        min-height: auto !important;
-                        height: auto !important;
-                        padding: 0 !important;
-                    }
-                    /* Ensure elements don't break awkwardly */
-                    table { page-break-inside: avoid; }
-                    tr { page-break-inside: avoid; page-break-after: auto; }
-                    .question-block { page-break-inside: auto; margin-bottom: 1.5rem !important; }
-                    .options-block { page-break-inside: avoid; }
-                    .pembahasan-block { page-break-inside: auto; }
-                    img { max-width: 100% !important; page-break-inside: avoid; }
+                    /* Let html2pdf handle pagination internally */
                 }
                 @media screen {
                     .floating-controls {
@@ -117,19 +131,20 @@ export default function PrintClientHelper() {
                 }
             `}} />
 
-            <div className="no-print floating-controls">
+            <div className="no-print floating-controls" data-html2canvas-ignore="true">
                 <button
                     onClick={() => window.location.href = '/student/dashboard'}
                     className="btn-back"
+                    disabled={isGenerating}
                 >
                     ← Kembali
                 </button>
                 <button
                     onClick={handlePrint}
-                    disabled={!isReady}
+                    disabled={!isReady || isGenerating}
                     className="btn-print"
                 >
-                    {isReady ? '🖨️ Cetak / Simpan PDF' : '⏳ Memproses...'}
+                    {!isReady ? '⏳ Memproses grafik...' : isGenerating ? '🔄 Mengunduh PDF...' : '⬇️ Unduh PDF LBS'}
                 </button>
             </div>
         </>

@@ -57,7 +57,7 @@ export default async function PrintTryoutPage({ params }: { params: Promise<{ id
 
     return (
         <div id="printable-area" style={{ backgroundColor: 'white', color: 'black', fontFamily: 'sans-serif', fontSize: '11px', width: '100%' }}>
-            <PrintClientHelper />
+            <PrintClientHelper tryoutId={tryoutId} />
 
             {/* Header / Vimara Blue Theme */}
             <div style={{ padding: '1rem 1.25rem', backgroundColor: '#eff6ff', borderBottom: '2px solid #bfdbfe', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
