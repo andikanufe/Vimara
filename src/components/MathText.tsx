@@ -34,8 +34,8 @@ export default function MathText({ text, className, style }: {
                         url = `https://drive.google.com/thumbnail?id=${gdriveMatch[1]}&sz=w1000`;
                     }
                     return (
-                        <div key={segIdx} style={{ margin: '1rem 0', display: 'flex', justifyContent: 'center' }}>
-                            <img src={url} alt="Gambar" style={{ maxWidth: '100%', maxHeight: '500px', objectFit: 'contain', borderRadius: '8px', border: '1px solid var(--border)' }} />
+                        <div key={segIdx} style={{ margin: '1rem 0', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            <img src={url} alt="Gambar" style={{ width: 'auto', maxWidth: '100%', height: 'auto', maxHeight: '500px', objectFit: 'contain', borderRadius: '8px', border: '1px solid var(--border)' }} />
                         </div>
                     );
                 }

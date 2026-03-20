@@ -101,8 +101,8 @@ export default async function PrintTryoutPage({ params }: { params: Promise<{ id
                                 <div style={{ fontWeight: 'bold', minWidth: '16px' }}>{idx + 1}.</div>
                                 <div style={{ flex: 1 }}>
                                     {imgUrl && (
-                                        <div style={{ marginBottom: '0.4rem', display: 'flex', justifyContent: 'center' }}>
-                                            <img src={imgUrl} alt="Soal" style={{ maxWidth: '100%', maxHeight: '450px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #ddd' }} />
+                                        <div style={{ marginBottom: '0.4rem', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                            <img src={imgUrl} alt="Soal" style={{ width: 'auto', maxWidth: '100%', height: 'auto', maxHeight: '450px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #ddd' }} />
                                         </div>
                                     )}
                                     <div style={{ marginBottom: '0.4rem', lineHeight: 1.3 }}>

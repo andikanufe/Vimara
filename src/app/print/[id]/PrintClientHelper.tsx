@@ -108,11 +108,12 @@ export default function PrintClientHelper({ fileName }: { fileName?: string }) {
                     }
 
                     img {
+                        width: auto !important;
+                        height: auto !important;
                         max-width: 100%;
-                        height: auto;
-                        page-break-inside: avoid !important;
                         display: block;
-                        margin: 0.5rem 0;
+                        margin: 0.5rem auto; /* Center the image */
+                        page-break-inside: avoid !important;
                     }
                     
                     svg, iframe { 
