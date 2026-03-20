@@ -50,20 +50,13 @@ export default async function PrintTryoutPage({ params }: { params: Promise<{ id
 
     let questionsData = questionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    if (tryoutData.randomizeQuestions) {
-        // Fisher-Yates Shuffle
-        for (let i = questionsData.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [questionsData[i], questionsData[j]] = [questionsData[j], questionsData[i]];
-        }
-    } else {
-        // Sort by createdAt (default sequential order)
-        questionsData.sort((a: any, b: any) => {
-            const dateA = a.createdAt?.toDate?.() || new Date(0);
-            const dateB = b.createdAt?.toDate?.() || new Date(0);
-            return dateA.getTime() - dateB.getTime();
-        });
-    }
+    // Always sort by createdAt for print to ensure consistency with the question package,
+    // ignoring the randomization setting used for the online exam.
+    questionsData.sort((a: any, b: any) => {
+        const dateA = a.createdAt?.toDate?.() || new Date(0);
+        const dateB = b.createdAt?.toDate?.() || new Date(0);
+        return dateA.getTime() - dateB.getTime();
+    });
 
     const questions = questionsData;
 
@@ -92,7 +85,7 @@ export default async function PrintTryoutPage({ params }: { params: Promise<{ id
                     const imgUrl = q.imageUrl as string | null;
 
                     return (
-                        <div key={q.id} className="question-block" style={{ breakInside: 'avoid', marginBottom: '0.75rem', pageBreakInside: 'avoid' }}>
+                        <div key={q.id} className="question-block" style={{ breakInside: 'avoid', marginBottom: '1.25rem', pageBreakInside: 'avoid' }}>
                             <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
                                 <div style={{ fontWeight: 'bold', minWidth: '16px' }}>{idx + 1}.</div>
                                 <div style={{ flex: 1 }}>

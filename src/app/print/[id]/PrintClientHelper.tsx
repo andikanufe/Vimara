@@ -93,10 +93,11 @@ export default function PrintClientHelper({ fileName }: { fileName?: string }) {
                        but strictly prevent inner contents (images, tables, options) from slicing in half.
                     */
                     .question-block {
-                        page-break-inside: auto !important; /* Allow the block to cross pages to avoid white space */
+                        page-break-inside: avoid !important; /* FORBID splitting a question in half */
+                        break-inside: avoid !important;
                         margin-bottom: 2rem !important; /* Consistent spacing between questions */
-                        border-bottom: 1px solid #ccc !important;
-                        padding-bottom: 1.5rem !important;
+                        border-bottom: 1px solid #eee !important;
+                        padding-bottom: 1rem !important;
                     }
 
                     /* Prevent atomic components from being sliced in half horizontally */
