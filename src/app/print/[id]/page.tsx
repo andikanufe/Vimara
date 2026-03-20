@@ -85,24 +85,34 @@ export default async function PrintTryoutPage({ params }: { params: Promise<{ id
                 </div>
             </div>
 
-            {/* Split Page Layout: Left for Questions, Right for Scratchpad */}
-            {/* Warning: use standard block layout instead of flex to guarantee flawless page breaks in print */}
-            <div style={{ position: 'relative', minHeight: '100vh', padding: '0 1.25rem 1.25rem 1.25rem' }}>
-
-                {/* Question Content Block confined to left 55% */}
-                <div style={{ width: '55%', paddingRight: '2rem', borderRight: '2px dashed #94a3b8', minHeight: '100vh' }}>
-                    {questions.map((q: any, idx) => {
-                        const qType = q.questionType as string;
-                        const imgUrl = q.imageUrl as string | null;
+            {/* Two Column Layout for Questions */}
+            <div style={{ columns: '2', columnGap: '1.25rem', padding: '0 1.25rem 1rem 1.25rem' }}>
+                {questions.map((q: any, idx) => {
+                    const qType = q.questionType as string;
+                    const imgUrl = q.imageUrl as string | null;
 
                     return (
-                        <div key={q.id} className="question-block" style={{ marginBottom: '0.75rem' }}>
+                        <div key={q.id} className="question-block" style={{ breakInside: 'avoid', marginBottom: '0.75rem', pageBreakInside: 'avoid' }}>
                             <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
                                 <div style={{ fontWeight: 'bold', minWidth: '16px' }}>{idx + 1}.</div>
                                 <div style={{ flex: 1 }}>
                                     {imgUrl && (
-                                        <div style={{ marginBottom: '0.4rem', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                                            <img src={imgUrl} alt="Soal" style={{ width: 'auto', maxWidth: '100%', height: 'auto', maxHeight: '450px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #ddd' }} />
+                                        <div style={{ marginBottom: '0.4rem' }}>
+                                            <img 
+                                                src={imgUrl} 
+                                                alt="Soal" 
+                                                style={{ 
+                                                    display: 'block',
+                                                    margin: '0 auto',
+                                                    maxWidth: '100%', 
+                                                    width: 'auto',
+                                                    height: 'auto', 
+                                                    maxHeight: '350px', 
+                                                    objectFit: 'contain', 
+                                                    borderRadius: '4px', 
+                                                    border: '1px solid #ddd' 
+                                                }} 
+                                            />
                                         </div>
                                     )}
                                     <div style={{ marginBottom: '0.4rem', lineHeight: 1.3 }}>
@@ -157,7 +167,6 @@ export default async function PrintTryoutPage({ params }: { params: Promise<{ id
                         </div>
                     );
                 })}
-                </div>
             </div>
         </div>
     );
