@@ -46,56 +46,57 @@ export async function POST(request: Request) {
             questionContext += `Kunci Jawaban (B/S):\n${bsContext}\n\n`;
         } else {
             questionContext += `Kunci Jawaban: ${correctAnswer}\n\n`;
-        }
+        }        const systemMessage = `Kamu adalah AI Edukasi yang cerdas, ramah, dan ahli dalam bidang Matematika serta Sains.
+Tugas utamamu adalah membantu Bapak/Ibu Guru membuat pembahasan soal yang sangat berkualitas, akurat, dan mudah dipahami oleh siswa.
 
-        const systemMessage = `Kamu adalah bot pembuat laporan (Report Generator) yang SANGAT KAKU dan DINGIN. PRIORITAS UTAMA: FORMAT. DILARANG MEMBERI KALIMAT PENGANTAR. DILARANG KERAS MENAMBAH HEADER ATAU JUDUL LAIN DI LUAR TEMPLATE.
+PRINSIP UTAMA:
+1. FORMAT TERSTRUKTUR: Gunakan template di bawah ini secara konsisten.
+2. MATEMATIKA CANTIK: Selalu gunakan penanda $$ ... $$ untuk SETIAP rumus atau simbol matematika agar ter-render secara profesional dengan LaTeX.
+3. PENJELASAN JELAS: Jangan hanya memberi jawaban akhir, jelaskan alur logika berpikirnya langkah-demi-langkah.
+4. RAMAH & PROFESIONAL: Gunakan bahasa Indonesia yang baik, benar, dan memotivasi siswa.
 
-Tugasmu mengonversi solusi soal matematika ke dalam template berformat Markdown berikut dengan cara MENGISI TEKS YANG BERTANDA KURUNG SIKU [ ]. JANGAN MENGUBAH HEADER.
-
-FORMAT OUTPUT WAJIB 100% PERSIS SEPERTI INI (Hanya salin dan isi):
+TEMPLATE OUTPUT (SALIN & ISI):
 
 📌 **Bedah Soal**
-[Tulis Diketahui & Ditanya secara singkat dan padat (maks 3 baris)]
+[Isi dengan apa yang diketahui dan ditanyakan dari soal secara ringkas]
 
-🧠 **Konsep Dasar**
-[TULIS RUMUS ATAU SIFAT MATEMATIS TANPA KATA PENGANTAR (misal, JANGAN tulis "Konsep yang digunakan adalah..."). LANGSUNG GUNAKAN $$...$$ UNTUK RUMUS.]
-[LALU, Lanjutkan langsung dengan penjabaran/perhitungan penyelesaian langkah demi langkah di sini juga. DILARANG MEMBUAT HEADER BARU. Fokus pada angka dan variabel, JANGAN terlalu banyak kata pengantar di setiap langkahnya. PENTING UNTUK PGK: Bahas singkat per pernyataan dan tutup dengan tabel.]
+🧠 **Konsep Dasar & Penyelesaian**
+[Jelaskan rumus/teori yang digunakan menggunakan $$ ... $$. Lanjutkan dengan langkah-langkah perhitungan secara detail namun tetap padat. Untuk soal PGK, bahas setiap pernyataan secara singkat.]
 
-⚡ **Cara Kilat**
-[HAPUS SEMUA SECTION INI BESERTA JUDULNYA JIKA TIDAK ADA TRIK CEPAT/JALAN PINTAS YG NYATA]
+⚡ **Cara Kilat (Opsional)**
+[Berikan trik cepat atau logika praktis jika ada. Jika tidak ada, hilangkan bagian ini.]
 
 ✅ **Hasil Akhir**
-[1 kalimat kesimpulan yang berisi jawaban hasil akhir]`;
+[Kesimpulan akhir yang padat, misalnya: "Jadi, nilai turunan dari fungsi tersebut adalah $$2x$$."]`;
 
-        const prompt = `SALIN TEMPLATE DI ATAS LALU ISI. JILAT SEMUA ATURANNYA MENTAH-MENTAH.
+        const prompt = `Silakan buatkan pembahasan untuk soal berikut mengikuti instruksi dan template di atas.
 
-ATURAN TAMBAHAN:
-- Jika butuh grafik/koordinat, SELIPKAN kodingan Python ini di dalam area "Konsep Dasar":
+ATURAN KHUSUS:
+- Jika soal atau pembahasan memerlukan grafik koordinat kartesius (Garis, Kurva, Titik), sertakan blok kode Python berikut di dalam bagian "Konsep Dasar":
 [python]
 import matplotlib.pyplot as plt
 import numpy as np
 fig, ax = plt.subplots(figsize=(8, 8))
+# Sumbu Utama
+ax.spines['left'].set_position('zero')
+ax.spines['bottom'].set_position('zero')
 ax.spines['right'].set_color('none')
 ax.spines['top'].set_color('none')
 ax.xaxis.set_ticks_position('bottom')
 ax.yaxis.set_ticks_position('left')
+# Grid & Ticks
 ticks = np.arange(-10, 11, 1)
 ax.set_xticks(ticks)
 ax.set_yticks(ticks)
-ax.set_xticklabels([str(t) if t != 0 else '' for t in ticks])
-ax.set_yticklabels([str(t) if t != 0 else '' for t in ticks])
-ax.plot(1, 0, ">k", transform=ax.get_yaxis_transform(), clip_on=False)
-ax.plot(0, 1, "^k", transform=ax.get_xaxis_transform(), clip_on=False)
-ax.spines['left'].set_position('zero')
-ax.spines['bottom'].set_position('zero')
 ax.grid(True, linestyle='--', alpha=0.4)
 ax.set_xlim(-10, 10)
 ax.set_ylim(-10, 10)
+# Kode tambahan grafik selipkan di bawah ini:
 [/python]
-HARAM backtick \`\`\`! Hanya gunakan penanda [python]...[/python]!
-- PERINGATAN AKURASI: Pastikan hitunganmu SESUAI dengan Kunci Jawaban!
+- HARAM menggunakan \`\`\` (backticks). Hanya gunakan [python]...[/python].
+- Pastikan akurasi jawaban harus 100% selaras dengan Kunci Jawaban yang diberikan.
 
-SOAL:
+DATA SOAL:
 ${questionContext}`;
 
         const response = await fetch(
@@ -112,8 +113,8 @@ ${questionContext}`;
                         { role: 'system', content: systemMessage },
                         { role: 'user', content: prompt }
                     ],
-                    temperature: 0.1, // menurunkan temperature agar lebih kaku ngikutin instruksi template
-                    max_completion_tokens: 2000,
+                    temperature: 0.3, // Sedikit dinaikkan agar tidak terlalu kaku namun tetap akurat
+                    max_completion_tokens: 2500,
                 }),
             }
         );
@@ -121,22 +122,14 @@ ${questionContext}`;
         if (!response.ok) {
             const errText = await response.text();
             console.error('Groq API Error:', errText);
-            return NextResponse.json({ error: 'Gagal menghubungi AI. Coba lagi.' }, { status: 500 });
+            return NextResponse.json({ error: 'Gagal menghubungi AI. Pastikan GROQ_API_KEY sudah benar.' }, { status: 500 });
         }
 
         const data = await response.json();
         let generatedText = data?.choices?.[0]?.message?.content || '';
 
-        // POST-PROCESSING CLEANUP: Untuk mengatasi bandelnya AI yang masih halusinasi nambahin header ilegal dsb.
-        generatedText = generatedText.replace(/📝\s*\**Pembahasan\**/gi, '');
-        generatedText = generatedText.replace(/\*\*Pembahasan\*\*/gi, '');
-        generatedText = generatedText.replace(/💡\s*\**Solusi\**/gi, '');
-        generatedText = generatedText.replace(/\*\*Solusi\*\*/gi, '');
-        generatedText = generatedText.replace(/Menggunakan\skonsep\s.+?:\n/gi, '');
-        generatedText = generatedText.replace(/Berikut\sadalah\spembahasan.+?:\n/gi, '');
-
         if (!generatedText) {
-            return NextResponse.json({ error: 'AI tidak menghasilkan pembahasan. Coba lagi.' }, { status: 500 });
+            return NextResponse.json({ error: 'AI tidak menghasilkan pembahasan. Silakan coba generate ulang.' }, { status: 500 });
         }
 
         // Track usage in Firebase

@@ -215,6 +215,13 @@ export default function ExamInterface({
   const goNext = () => { if (currentIndex < questions.length - 1) setCurrentIndex(currentIndex + 1); };
   const goPrev = () => { if (currentIndex > 0) setCurrentIndex(currentIndex - 1); };
 
+  const exitExam = async () => {
+    const ok = await confirm('Keluar Ujian?', 'Ujian Anda akan tersimpan secara otomatis, dan waktu ujian akan terus berjalan di latar belakang. Anda bisa kembali ke ujian ini dari dashboard. Keluar sekarang?');
+    if (ok) {
+      router.push('/student/dashboard');
+    }
+  };
+
   const formatTimePart = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -238,8 +245,10 @@ export default function ExamInterface({
   const selectedBS = isBenarSalah && answers[currentQ.id] ? answers[currentQ.id].split(',') : ['', '', '', '', ''];
 
   const optionColors: Record<string, string> = {
-    A: '#4f6ef7', B: '#4f6ef7', C: '#10b981', D: '#10b981', E: '#ef4444'
+    A: '#2563eb', B: '#2563eb', C: '#2563eb', D: '#2563eb', E: '#2563eb'
   };
+
+  const allAnswered = questions.length > 0 && questions.every(q => !!answers[q.id] && answers[q.id].replace(/,/g, '').trim().length > 0);
 
   const timerDanger = timeLeft !== null && timeLeft <= 300;
   const timerWarning = timeLeft !== null && timeLeft <= 600 && !timerDanger;
@@ -288,7 +297,7 @@ export default function ExamInterface({
 
       {/* ===== TOP HEADER BAR ===== */}
       <header className="v2-exam-topbar">
-        <button className="v2-back-btn" onClick={goPrev} disabled={currentIndex === 0} title="Kembali">
+        <button className="v2-back-btn" onClick={exitExam} title="Keluar ke Dashboard">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M13 4l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
         <span className="v2-topbar-title">{tryoutTitle}</span>
@@ -302,7 +311,7 @@ export default function ExamInterface({
               <span className="v2-timer-box">{time.s}</span>
             </div>
           )}
-          <button className="v2-submit-btn" onClick={confirmFinish} disabled={isSubmitting}>
+          <button className="v2-submit-btn" onClick={confirmFinish} disabled={isSubmitting || (!allAnswered && timeLeft !== 0)}>
             {isSubmitting ? '...' : 'Kumpulkan'}
           </button>
         </div>
@@ -466,8 +475,8 @@ export default function ExamInterface({
                           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                           width: '24px', height: '24px', borderRadius: '4px', border: '2px solid',
                           marginRight: '0.75rem', flexShrink: 0,
-                          background: isChecked ? '#3B82F6' : '#fff',
-                          borderColor: isChecked ? '#3B82F6' : '#d1d5db',
+                          background: isChecked ? '#2563eb' : '#fff',
+                          borderColor: isChecked ? '#2563eb' : '#d1d5db',
                           color: '#fff'
                         }}>
                           {isChecked && <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
@@ -499,8 +508,8 @@ export default function ExamInterface({
 
       {/* ===== BOTTOM BAR ===== */}
       <footer className="v2-exam-bottombar">
-        <button className="v2-bottom-btn outline" onClick={goPrev} disabled={currentIndex === 0}>
-          Kembali
+        <button className="v2-bottom-btn outline" onClick={goPrev} disabled={currentIndex === 0} title="Soal Sebelumnya" style={{ padding: '0.5rem' }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
 
         <button className={`v2-bottom-btn doubt ${doubted[currentQ.id] ? 'active' : ''}`} onClick={toggleDoubt}>
@@ -512,8 +521,8 @@ export default function ExamInterface({
           <span className="v2-save-status">
             {isSaving ? '💾 Menyimpan...' : '✓ Tersimpan'}
           </span>
-          <button className="v2-bottom-btn primary" onClick={goNext} disabled={currentIndex === questions.length - 1}>
-            Lanjut
+          <button className="v2-bottom-btn primary" onClick={goNext} disabled={currentIndex === questions.length - 1} title="Soal Selanjutnya" style={{ padding: '0.5rem' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
         </div>
       </footer>

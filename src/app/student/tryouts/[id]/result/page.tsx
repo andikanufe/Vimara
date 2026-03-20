@@ -178,11 +178,7 @@ export default async function TryoutResultPage({ params }: { params: Promise<{ i
               <a href={`/print/${tryoutId}`} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', textDecoration: 'none' }}>
                 🖨️ Download Soal (PDF)
               </a>
-              {score > 70 && (
-                <a href={`/print/${tryoutId}/pembahasan`} target="_blank" rel="noreferrer" className="btn btn-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', textDecoration: 'none', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', border: 'none' }}>
-                  📖 Download Soal + Pembahasan
-                </a>
-              )}
+
               {score <= 70 && (
                 <form action={retakeTryout}>
                   <button type="submit" className="btn btn-primary btn-sm" style={{ width: '100%' }}>Ulangi Ujian</button>

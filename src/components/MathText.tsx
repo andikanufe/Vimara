@@ -5,7 +5,6 @@ import 'katex/dist/katex.min.css';
 import dynamic from 'next/dynamic';
 
 const PythonGraph = dynamic(() => import('./PythonGraph'), { ssr: false });
-const TikzGraph = dynamic(() => import('./TikzGraph'), { ssr: false });
 
 /**
  * Renders text that may contain LaTeX expressions.
@@ -23,16 +22,11 @@ export default function MathText({ text, className, style }: {
 
     // 1. Separate special blocks (Python & Display Math & Tables) that can be multi-line
     // We keep $...$ (inline) within the text segments for now
-    const segments = text.split(/(\[python\][\s\S]*?\[\/python\]|\[tikz\][\s\S]*?\[\/tikz\]|\[table\][\s\S]*?\[\/table\]|\[img\][\s\S]*?\[\/img\]|\$\$[\s\S]*?\$\$)/g);
+    const segments = text.split(/(\[python\][\s\S]*?\[\/python\]|\[table\][\s\S]*?\[\/table\]|\[img\][\s\S]*?\[\/img\]|\$\$[\s\S]*?\$\$)/g);
 
     return (
         <div className={className} style={{ ...style, whiteSpace: 'pre-wrap' }}>
             {segments.map((segment, segIdx) => {
-                if (segment.startsWith('[tikz]') && segment.endsWith('[/tikz]')) {
-                    const code = segment.slice(6, -7).trim();
-                    return <TikzGraph key={segIdx} code={code} />;
-                }
-
                 if (segment.startsWith('[img]') && segment.endsWith('[/img]')) {
                     let url = segment.slice(5, -6).trim();
                     const gdriveMatch = url.match(/(?:file\/d\/|id=|folders\/)([\w-]{25,})/);
@@ -41,7 +35,7 @@ export default function MathText({ text, className, style }: {
                     }
                     return (
                         <div key={segIdx} style={{ margin: '1rem 0', display: 'flex', justifyContent: 'center' }}>
-                            <img src={url} alt="Gambar" style={{ maxWidth: '100%', maxHeight: '400px', borderRadius: '8px', border: '1px solid var(--border)' }} />
+                            <img src={url} alt="Gambar" style={{ maxWidth: '100%', maxHeight: '500px', objectFit: 'contain', borderRadius: '8px', border: '1px solid var(--border)' }} />
                         </div>
                     );
                 }

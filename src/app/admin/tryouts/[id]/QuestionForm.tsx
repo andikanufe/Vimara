@@ -303,7 +303,6 @@ export default function QuestionForm({
                             <span>🔢 <strong>LaTeX:</strong> <code>$x^2$</code> inline, <code>$$\frac{'{'} a{'}'}{'{'}b{'}'}$$</code> display</span>
                             <span>📊 <strong>Tabel:</strong> <code>[table]Kol1|Kol2\nData1|Data2[/table]</code></span>
                             <span>🐍 <strong>Python:</strong> <code>[python]import matplotlib...plt.show()[/python]</code></span>
-                            <span>📐 <strong>TikZ:</strong> <code>[tikz]\begin{'{'}tikzpicture{'}'}...\end{'{'}tikzpicture{'}'}[/tikz]</code></span>
                             <span>🖼️ <strong>Gambar:</strong> <code>[img]link-google-drive-atau-url[/img]</code></span>
                         </div>
                     </div>

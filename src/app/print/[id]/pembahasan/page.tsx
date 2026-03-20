@@ -29,10 +29,17 @@ export default async function PrintPembahasanPage({ params }: { params: Promise<
     const assignment = assignmentSnap.docs[0].data();
     if (Number(assignment.score || 0) <= 70) return redirect(`/student/tryouts/${tryoutId}/result`);
 
-    // Fetch tryout and questions
     const tryoutDoc = await db.collection('tryouts').doc(tryoutId).get();
     if (!tryoutDoc.exists) return notFound();
     const tryoutData = tryoutDoc.data()!;
+
+    let packageName = 'Paket';
+    if (tryoutData.categoryId) {
+        const catDoc = await db.collection('packageCategories').doc(tryoutData.categoryId).get();
+        if (catDoc.exists) packageName = catDoc.data()!.name;
+    }
+
+    const safeFileName = `Pembahasan-${packageName}-${tryoutData.category}-${tryoutData.title}`.replace(/[^a-zA-Z0-9 -]/g, '_');
 
     const questionsSnap = await db.collection('questions').where('tryoutId', '==', tryoutId).get();
     let questions = questionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -44,24 +51,19 @@ export default async function PrintPembahasanPage({ params }: { params: Promise<
 
     return (
         <div id="printable-area" style={{ backgroundColor: 'white', color: 'black', fontFamily: 'sans-serif', fontSize: '12px', width: '100%' }}>
-            <PrintClientHelper />
+            <PrintClientHelper fileName={safeFileName} />
 
-            {/* Header / Vimara Blue Theme */}
-            <div style={{ padding: '1.25rem 1.5rem', backgroundColor: '#eff6ff', borderBottom: '2px solid #bfdbfe', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            {/* Minimalist Header for Print Efficiency */}
+            <div style={{ paddingBottom: '0.75rem', borderBottom: '2px solid #000', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <div>
-                    <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 0.25rem 0', color: '#1e3a8a', letterSpacing: '-0.5px' }}>Pembahasan Soal</h1>
-                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#1d4ed8' }}>
-                        {tryoutData.title} <span style={{ color: '#93c5fd', margin: '0 0.4rem' }}>•</span> {tryoutData.category}
+                    <h1 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 0.1rem 0', color: '#000' }}>Pembahasan</h1>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#333' }}>
+                        {tryoutData.title} <span style={{ margin: '0 0.3rem' }}>•</span> {tryoutData.category}
                     </div>
-                    {tryoutData.description && (
-                        <div style={{ fontSize: '0.85rem', fontWeight: 500, color: '#3b82f6', marginTop: '0.25rem' }}>
-                            {tryoutData.description}
-                        </div>
-                    )}
-                    <PrintWatermark userName={session?.name} userEmail={session?.username} />
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                    <img src="/vimara-logo.svg" alt="Vimara Logo" style={{ height: '40px', objectFit: 'contain' }} />
+                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    <img src="/vimara-logo.svg" alt="Vimara Logo" style={{ height: '24px', objectFit: 'contain', marginBottom: '4px' }} className="print-logo" />
+                    <PrintWatermark userName={session?.name} userEmail={session?.username} />
                 </div>
             </div>
 

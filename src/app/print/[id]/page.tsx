@@ -32,6 +32,18 @@ export default async function PrintTryoutPage({ params }: { params: Promise<{ id
     if (!tryoutDoc.exists) return notFound();
     const tryoutData = tryoutDoc.data()!;
 
+    let packageName = 'Paket';
+    if (tryoutData.categoryId) {
+        const catDoc = await db.collection('packageCategories').doc(tryoutData.categoryId).get();
+        if (catDoc.exists) {
+            packageName = catDoc.data()!.name;
+        }
+    }
+
+    // Format: Soal-[Paket]-[Kategori]-[Detail/Title]
+    // Example: Soal-Paket 1-SNBT-Penalaran Umum
+    const safeFileName = `Soal-${packageName}-${tryoutData.category}-${tryoutData.title}`.replace(/[^a-zA-Z0-9 -]/g, '_');
+
     const questionsSnap = await db.collection('questions')
         .where('tryoutId', '==', tryoutId)
         .get();
@@ -57,36 +69,40 @@ export default async function PrintTryoutPage({ params }: { params: Promise<{ id
 
     return (
         <div id="printable-area" style={{ backgroundColor: 'white', color: 'black', fontFamily: 'sans-serif', fontSize: '11px', width: '100%' }}>
-            <PrintClientHelper tryoutId={tryoutId} />
+            <PrintClientHelper fileName={safeFileName} />
 
-            {/* Header / Vimara Blue Theme */}
-            <div style={{ padding: '1rem 1.25rem', backgroundColor: '#eff6ff', borderBottom: '2px solid #bfdbfe', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            {/* Minimalist Header for Print Efficiency */}
+            <div style={{ paddingBottom: '0.75rem', borderBottom: '2px solid #000', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <div>
-                    <h1 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 0.2rem 0', color: '#1e3a8a', letterSpacing: '-0.5px' }}>Lembar Belajar Siswa</h1>
-                    <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1d4ed8' }}>
-                        {tryoutData.title} <span style={{ color: '#93c5fd', margin: '0 0.3rem' }}>•</span> {tryoutData.category}
+                    <h1 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 0.1rem 0', color: '#000' }}>Lembar Aktivitas Siswa</h1>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#333' }}>
+                        {tryoutData.title} <span style={{ margin: '0 0.3rem' }}>•</span> {tryoutData.category}
                     </div>
-                    <PrintWatermark userName={session?.name} userEmail={session?.username} />
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                    <img src="/vimara-logo.svg" alt="Vimara Logo" style={{ height: '32px', objectFit: 'contain' }} />
+                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                    <img src="/vimara-logo.svg" alt="Vimara Logo" style={{ height: '24px', objectFit: 'contain', marginBottom: '4px' }} className="print-logo" />
+                    <PrintWatermark userName={session?.name} userEmail={session?.username} />
                 </div>
             </div>
 
-            {/* Two Column Layout for Questions */}
-            <div style={{ columns: '2', columnGap: '1.25rem', padding: '0 1.25rem 1rem 1.25rem' }}>
-                {questions.map((q: any, idx) => {
-                    const qType = q.questionType as string;
-                    const imgUrl = q.imageUrl as string | null;
+            {/* Split Page Layout: Left for Questions, Right for Scratchpad */}
+            {/* Warning: use standard block layout instead of flex to guarantee flawless page breaks in print */}
+            <div style={{ position: 'relative', minHeight: '100vh', padding: '0 1.25rem 1.25rem 1.25rem' }}>
+
+                {/* Question Content Block confined to left 55% */}
+                <div style={{ width: '55%', paddingRight: '2rem', borderRight: '2px dashed #94a3b8', minHeight: '100vh' }}>
+                    {questions.map((q: any, idx) => {
+                        const qType = q.questionType as string;
+                        const imgUrl = q.imageUrl as string | null;
 
                     return (
-                        <div key={q.id} style={{ breakInside: 'avoid', marginBottom: '0.75rem', pageBreakInside: 'avoid' }}>
+                        <div key={q.id} className="question-block" style={{ marginBottom: '0.75rem' }}>
                             <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
                                 <div style={{ fontWeight: 'bold', minWidth: '16px' }}>{idx + 1}.</div>
                                 <div style={{ flex: 1 }}>
                                     {imgUrl && (
                                         <div style={{ marginBottom: '0.4rem', display: 'flex', justifyContent: 'center' }}>
-                                            <img src={imgUrl} alt="Soal" style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '4px', border: '1px solid #ddd' }} />
+                                            <img src={imgUrl} alt="Soal" style={{ maxWidth: '100%', maxHeight: '450px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #ddd' }} />
                                         </div>
                                     )}
                                     <div style={{ marginBottom: '0.4rem', lineHeight: 1.3 }}>
@@ -141,6 +157,7 @@ export default async function PrintTryoutPage({ params }: { params: Promise<{ id
                         </div>
                     );
                 })}
+                </div>
             </div>
         </div>
     );
