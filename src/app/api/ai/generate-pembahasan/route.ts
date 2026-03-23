@@ -52,7 +52,7 @@ Tugas utamamu adalah membantu Bapak/Ibu Guru membuat pembahasan soal yang sangat
 PRINSIP UTAMA:
 1. FORMAT TERSTRUKTUR: Gunakan template di bawah ini secara konsisten.
 2. MATEMATIKA CANTIK: Selalu gunakan penanda $$ ... $$ untuk SETIAP rumus atau simbol matematika agar ter-render secara profesional dengan LaTeX.
-3. PENJELASAN JELAS: Jangan hanya memberi jawaban akhir, jelaskan alur logika berpikirnya langkah-demi-langkah.
+3. KONSEP & LANGKAH: Pisahkan dengan jelas antara pengenalan konsep/rumus dengan langkah-langkah pengerjaannya (pembahasan).
 4. RAMAH & PROFESIONAL: Gunakan bahasa Indonesia yang baik, benar, dan memotivasi siswa.
 
 TEMPLATE OUTPUT (SALIN & ISI):
@@ -60,41 +60,55 @@ TEMPLATE OUTPUT (SALIN & ISI):
 📌 **Bedah Soal**
 [Isi dengan apa yang diketahui dan ditanyakan dari soal secara ringkas]
 
-🧠 **Konsep Dasar & Penyelesaian**
-[Jelaskan rumus/teori yang digunakan menggunakan $$ ... $$. Lanjutkan dengan langkah-langkah perhitungan secara detail namun tetap padat. Untuk soal PGK, bahas setiap pernyataan secara singkat.]
+🧠 **Konsep Dasar**
+[Jelaskan rumus/teori utama yang digunakan menggunakan $$ ... $$. Berikan penjelasan singkat mengapa rumus ini dipilih.]
+
+📝 **Pembahasan**
+[Langkah-langkah perhitungan secara detail, sistematis, dan mudah diikuti. Gunakan bullet point jika perlu. Untuk soal PGK, bahas setiap pernyataan secara logis.]
 
 ⚡ **Cara Kilat (Opsional)**
-[Berikan trik cepat atau logika praktis jika ada. Jika tidak ada, hilangkan bagian ini.]
+[HANYA tulis bagian ini jika ada trik cepat atau logika praktis khusus. Jika tidak ada, JANGAN TULIS header atau bagian ini sama sekali.]
 
 ✅ **Hasil Akhir**
 [Kesimpulan akhir yang padat, misalnya: "Jadi, nilai turunan dari fungsi tersebut adalah $$2x$$."]`;
 
         const prompt = `Silakan buatkan pembahasan untuk soal berikut mengikuti instruksi dan template di atas.
 
-ATURAN KHUSUS:
-- Jika soal atau pembahasan memerlukan grafik koordinat kartesius (Garis, Kurva, Titik), sertakan blok kode Python berikut di dalam bagian "Konsep Dasar":
+ATURAN KHUSUS GRAFIK (WAJIB):
+- Jika soal atau pembahasan memerlukan grafik koordinat kartesius (Garis, Kurva, Titik, Bangun Datar), sertakan blok kode Python berikut di dalam bagian "Pembahasan":
 [python]
 import matplotlib.pyplot as plt
 import numpy as np
-fig, ax = plt.subplots(figsize=(8, 8))
-# Sumbu Utama
+
+# Pengaturan visual minimalis & profesional (Textbook Style)
+fig, ax = plt.subplots(figsize=(6, 6), dpi=100)
+ax.set_aspect('equal')
+
+# Sumbu Kartesius Utama
 ax.spines['left'].set_position('zero')
 ax.spines['bottom'].set_position('zero')
 ax.spines['right'].set_color('none')
 ax.spines['top'].set_color('none')
-ax.xaxis.set_ticks_position('bottom')
-ax.yaxis.set_ticks_position('left')
-# Grid & Ticks
-ticks = np.arange(-10, 11, 1)
-ax.set_xticks(ticks)
-ax.set_yticks(ticks)
-ax.grid(True, linestyle='--', alpha=0.4)
+
+# Grid halus & Ticks (Minimalis)
+ax.grid(True, linestyle=':', alpha=0.6, color='#BDC3C7')
+ax.set_axisbelow(True)
+
+# Panah Sumbu
+ax.plot(1, 0, ">k", transform=ax.get_yaxis_transform(), clip_on=False)
+ax.plot(0, 1, "^k", transform=ax.get_xaxis_transform(), clip_on=False)
+
+# Batasan Sumbu Otomatis (Default +/- 10, silakan sesuaikan jika koordinat sangat besar)
 ax.set_xlim(-10, 10)
 ax.set_ylim(-10, 10)
-# Kode tambahan grafik selipkan di bawah ini:
+
+# KODE GRAFIK (Gunakan warna premium: #2C3E50, #E74C3C, #3498DB, #27AE60)
+# Selipkan kode ax.plot atau ax.text di bawah ini:
 [/python]
 - HARAM menggunakan \`\`\` (backticks). Hanya gunakan [python]...[/python].
 - Pastikan akurasi jawaban harus 100% selaras dengan Kunci Jawaban yang diberikan.
+- JANGAN menuliskan teks seperti "Tidak ada cara kilat" di bagian Cara Kilat. Jika tidak ada, hapus seluruh bagiannya.
+- Berikan label yang jelas pada setiap objek di grafik menggunakan ax.text atau label di ax.plot.
 
 DATA SOAL:
 ${questionContext}`;

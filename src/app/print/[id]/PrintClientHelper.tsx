@@ -8,7 +8,7 @@ export function PrintWatermark({ userName, userEmail }: { userName?: string, use
         const now = new Date();
         setTimeStr(`${now.toLocaleDateString('id-ID')} jam ${now.toLocaleTimeString('id-ID')}`);
     }, []);
-    
+
     if (!userName || !timeStr) return null;
     return (
         <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.5rem', fontWeight: 500 }}>
@@ -22,37 +22,67 @@ export default function PrintClientHelper({ fileName }: { fileName?: string }) {
     const [showModal, setShowModal] = useState(false);
 
     useEffect(() => {
-        let retryCount = 0;
-        const maxRetries = 30; // 15 seconds
+        let cancelled = false;
 
-        const checkReady = setInterval(() => {
-            const allImages = Array.from(document.querySelectorAll('img'));
-            const imagesReady = allImages.every(img => img.complete);
-            const allGraphs = Array.from(document.querySelectorAll('[data-rendering]'));
-            const graphsReady = allGraphs.every(el => el.getAttribute('data-rendering') === 'false');
+        const waitForImages = async (images: HTMLImageElement[]) => {
+            await Promise.all(images.map((img) => {
+                // Force eager/decode in print flow to avoid long tail from deferred image loading.
+                img.loading = 'eager';
+                img.decoding = 'async';
 
-            retryCount++;
-            if ((imagesReady && graphsReady) || retryCount >= maxRetries) {
-                clearInterval(checkReady);
+                if (img.complete) return Promise.resolve();
+                return new Promise<void>((resolve) => {
+                    const done = () => {
+                        img.removeEventListener('load', done);
+                        img.removeEventListener('error', done);
+                        resolve();
+                    };
+                    img.addEventListener('load', done, { once: true });
+                    img.addEventListener('error', done, { once: true });
+                });
+            }));
+        };
+
+        const waitForGraphs = async (maxMs: number) => {
+            const start = Date.now();
+            while (Date.now() - start < maxMs) {
+                const allGraphs = Array.from(document.querySelectorAll('[data-rendering]'));
+                const graphsReady = allGraphs.every(el => el.getAttribute('data-rendering') === 'false');
+                if (graphsReady) return;
+                await new Promise((r) => setTimeout(r, 200));
+            }
+        };
+
+        const preparePrint = async () => {
+            const printableRoot = document.getElementById('printable-area') ?? document.body;
+            const images = Array.from(printableRoot.querySelectorAll('img'));
+            const imageWait = waitForImages(images);
+            const timeout = new Promise<void>((resolve) => setTimeout(resolve, 10000));
+
+            await Promise.race([imageWait, timeout]);
+            await waitForGraphs(10000);
+
+            if (!cancelled) {
                 setIsReady(true);
             }
-        }, 500);
+        };
 
-        return () => clearInterval(checkReady);
+        preparePrint();
+        return () => { cancelled = true; };
     }, []);
 
     const handlePrint = () => {
         setShowModal(true);
-        
+
         // Wait briefly so user reads the instructions, then set title & trigger print
         setTimeout(() => {
             const originalTitle = document.title;
             if (fileName) {
                 document.title = fileName;
             }
-            
+
             window.print();
-            
+
             if (fileName) {
                 document.title = originalTitle;
             }

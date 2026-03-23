@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Script from 'next/script';
 
 declare global {
@@ -10,11 +10,130 @@ declare global {
     }
 }
 
-export default function PythonGraph({ code }: { code: string }) {
+const MAX_CONCURRENT_RENDERS = 2;
+let activeRenders = 0;
+const renderQueue: Array<() => void> = [];
+
+const imageCache = new Map<string, string>();
+const inFlightRenders = new Map<string, Promise<string>>();
+let pyodideInitPromise: Promise<any> | null = null;
+let pyodideBasePackagesPromise: Promise<void> | null = null;
+
+function runWithQueue<T>(job: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+        const start = () => {
+            activeRenders += 1;
+            job()
+                .then(resolve)
+                .catch(reject)
+                .finally(() => {
+                    activeRenders -= 1;
+                    const next = renderQueue.shift();
+                    if (next) next();
+                });
+        };
+
+        if (activeRenders < MAX_CONCURRENT_RENDERS) {
+            start();
+        } else {
+            renderQueue.push(start);
+        }
+    });
+}
+
+async function getPyodideInstance() {
+    if (window.pyodide) return window.pyodide;
+    if (!pyodideInitPromise) {
+        pyodideInitPromise = window.loadPyodide({
+            indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.0/full/"
+        }).then((instance) => {
+            window.pyodide = instance;
+            return instance;
+        });
+    }
+    return pyodideInitPromise;
+}
+
+async function ensureBasePackages(pyodide: any) {
+    if (!pyodideBasePackagesPromise) {
+        pyodideBasePackagesPromise = pyodide.loadPackage(['matplotlib', 'micropip']);
+    }
+    await pyodideBasePackagesPromise;
+}
+
+function extractImports(code: string): string[] {
+    const imports = new Set<string>();
+    const regex = /^(?:from\s+([a-zA-Z0-9_]+)|\s*import\s+([a-zA-Z0-9_]+)(?:\s+as\s+[a-zA-Z0-9_]+)?)/gm;
+    let match;
+    while ((match = regex.exec(code)) !== null) {
+        if (match[1]) imports.add(match[1]);
+        if (match[2]) imports.add(match[2]);
+    }
+    return Array.from(imports);
+}
+
+async function renderGraphImage(code: string): Promise<string> {
+    const cached = imageCache.get(code);
+    if (cached) return cached;
+
+    const existingTask = inFlightRenders.get(code);
+    if (existingTask) return existingTask;
+
+    const task = runWithQueue(async () => {
+        const pyodide = await getPyodideInstance();
+        await ensureBasePackages(pyodide);
+
+        const imports = extractImports(code);
+        if (imports.length > 0) {
+            try {
+                await pyodide.loadPackagesFromImports(code);
+                const micropip = pyodide.pyimport('micropip');
+                await micropip.install(imports);
+            } catch (e) {
+                console.warn("Package installation warning:", e);
+            }
+        }
+
+        const setupCode = `
+import base64
+import io
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+user_code = ${JSON.stringify(code)}
+
+plt.clf()
+exec(user_code, globals())
+
+buf = io.BytesIO()
+plt.savefig(buf, format='png', bbox_inches='tight', transparent=True)
+buf.seek(0)
+img_b64 = base64.b64encode(buf.read()).decode('utf-8')
+plt.close()
+
+img_b64
+`;
+
+        const result = await pyodide.runPythonAsync(setupCode);
+        const src = `data:image/png;base64,${result}`;
+        imageCache.set(code, src);
+        return src;
+    }).finally(() => {
+        inFlightRenders.delete(code);
+    });
+
+    inFlightRenders.set(code, task);
+    return task;
+}
+
+export default function PythonGraph({ code, deferUntilVisible = true }: { code: string; deferUntilVisible?: boolean }) {
     const [imgSrc, setImgSrc] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isPyodideReady, setIsPyodideReady] = useState(false);
+    const [isVisible, setIsVisible] = useState(!deferUntilVisible);
+    const containerRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         if (typeof window.loadPyodide === 'function') {
@@ -31,7 +150,33 @@ export default function PythonGraph({ code }: { code: string }) {
     }, []);
 
     useEffect(() => {
-        if (!isPyodideReady || !code) return;
+        if (!deferUntilVisible) {
+            setIsVisible(true);
+            return;
+        }
+
+        const target = containerRef.current;
+        if (!target) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                for (const entry of entries) {
+                    if (entry.isIntersecting) {
+                        setIsVisible(true);
+                        observer.disconnect();
+                        break;
+                    }
+                }
+            },
+            { root: null, rootMargin: '300px 0px', threshold: 0.01 }
+        );
+
+        observer.observe(target);
+        return () => observer.disconnect();
+    }, [deferUntilVisible]);
+
+    useEffect(() => {
+        if (!isPyodideReady || !code || !isVisible) return;
 
         let isMounted = true;
 
@@ -39,71 +184,13 @@ export default function PythonGraph({ code }: { code: string }) {
             if (!isMounted) return;
             setLoading(true);
             setError(null);
-            setImgSrc(null);
+            setImgSrc(imageCache.get(code) ?? null);
 
             try {
-                if (!window.pyodide) {
-                    window.pyodide = await window.loadPyodide({
-                        indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.0/full/"
-                    });
-                }
-                const pyodide = window.pyodide;
-
-                // Load matplotlib and micropip
-                await pyodide.loadPackage(['matplotlib', 'micropip']);
-                const micropip = pyodide.pyimport('micropip');
-
-                // Extract package names from user code to install via micropip
-                const imports = new Set<string>();
-                const regex = /^(?:from\s+([a-zA-Z0-9_]+)|\s*import\s+([a-zA-Z0-9_]+)(?:\s+as\s+[a-zA-Z0-9_]+)?)/gm;
-                let match;
-                while ((match = regex.exec(code)) !== null) {
-                    if (match[1]) imports.add(match[1]);
-                    if (match[2]) imports.add(match[2]);
-                }
-
-                if (imports.size > 0) {
-                    try {
-                        // pyodide built-in loadPackagesFromImports is good for standard data science packages
-                        await pyodide.loadPackagesFromImports(code);
-                        // micropip covers pure-python PyPI packages like graphviz
-                        await micropip.install(Array.from(imports));
-                    } catch (e) {
-                        console.warn("Package installation warning:", e);
-                    }
-                }
-
-                // Python script to set up matplotlib headless and capture the plot as base64 string
-                const setupCode = `
-import base64
-import io
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-
-# User code string
-user_code = ${JSON.stringify(code)}
-
-# Clear previous plots
-plt.clf()
-
-# Execute user code directly into globals to preserve backward compatibility 
-exec(user_code, globals())
-
-# Save to base64
-buf = io.BytesIO()
-plt.savefig(buf, format='png', bbox_inches='tight', transparent=True)
-buf.seek(0)
-img_b64 = base64.b64encode(buf.read()).decode('utf-8')
-plt.close()
-
-img_b64
-`;
-
-                const result = await pyodide.runPythonAsync(setupCode);
+                const result = await renderGraphImage(code);
 
                 if (isMounted) {
-                    setImgSrc(`data:image/png;base64,${result}`);
+                    setImgSrc(result);
                 }
             } catch (err: any) {
                 console.error("Pyodide error:", err);
@@ -116,10 +203,11 @@ img_b64
         runPython();
 
         return () => { isMounted = false; };
-    }, [isPyodideReady, code]);
+    }, [isPyodideReady, code, isVisible]);
 
     return (
         <div
+            ref={containerRef}
             style={{ margin: '1rem 0', fontFamily: 'Inter, sans-serif' }}
             data-rendering={loading ? "true" : "false"}
         >
@@ -136,4 +224,3 @@ img_b64
         </div>
     );
 }
-
