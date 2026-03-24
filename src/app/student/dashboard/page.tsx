@@ -6,209 +6,255 @@ export const dynamic = 'force-dynamic';
 
 export default async function StudentDashboard() {
   const session = await getSession();
-
   if (!session) return null;
 
-  // 1. Fetch assignments for the student
+  // 1. Fetch ALL assignments for the student
   const assignmentsSnap = await db.collection('assignments')
     .where('studentId', '==', session.id)
     .get();
 
-  // 2. Sort documents by creation date (in-memory to avoid index need)
   const sortedDocs = assignmentsSnap.docs.sort((a, b) => {
     const dateA = a.data().createdAt?.toDate?.() || new Date(0);
     const dateB = b.data().createdAt?.toDate?.() || new Date(0);
     return dateB.getTime() - dateA.getTime();
   });
 
-  // 3. Fetch all package categories map for grouping
-  const categoriesSnap = await db.collection('packageCategories').get();
-  const categoriesMap = new Map();
-  categoriesSnap.docs.forEach(doc => {
-    categoriesMap.set(doc.id, { id: doc.id, ...doc.data() });
-  });
-
-  // 4. Enrich assignments with tryout details and package categories
   const enrichedAssignments = await Promise.all(sortedDocs.map(async (doc) => {
     const aData = doc.data();
     const tryoutDoc = await db.collection('tryouts').doc(aData.tryoutId as string).get();
-
     if (!tryoutDoc.exists) return null;
-
     const tData = tryoutDoc.data()!;
-    const categoryId = tData.categoryId;
-    const packageCategory = categoryId ? categoriesMap.get(categoryId) : null;
-
-    // Get question count
     const qSnap = await db.collection('questions').where('tryoutId', '==', tryoutDoc.id).count().get();
-    const qCount = qSnap.data().count;
-
     return {
       id: doc.id,
       ...aData,
-      tryout: {
-        id: tryoutDoc.id,
-        ...tData,
-        packageCategory,
-        _count: { questions: qCount }
-      }
+      tryout: { id: tryoutDoc.id, ...tData, _count: { questions: qSnap.data().count } }
     };
   }));
 
-  const validAssignments = enrichedAssignments.filter(Boolean);
+  const validAssignments: any[] = enrichedAssignments.filter(Boolean);
 
-  // 5. Grouping helper
-  const groupAssignments = (list: any[]) => {
-    const grouped = new Map<string, { id: string; name: string; assignments: any[] }>();
-    const individual: any[] = [];
-
-    list.forEach(a => {
-      const pkg = a.tryout.packageCategory;
-      if (pkg) {
-        if (!grouped.has(pkg.id)) {
-          grouped.set(pkg.id, { id: pkg.id, name: pkg.name, assignments: [] });
-        }
-        grouped.get(pkg.id)!.assignments.push(a);
-      } else {
-        individual.push(a);
-      }
-    });
-
-    return {
-      grouped: Array.from(grouped.values()),
-      individual
-    };
-  };
-
-  const pendingData = groupAssignments(validAssignments.filter((a: any) => a.status === 'PENDING' || a.status === 'ONGOING'));
+  const ongoingAssignment = validAssignments.find((a: any) => a.status === 'ONGOING');
+  const pendingAssignments = validAssignments.filter((a: any) => a.status === 'PENDING');
   const completedAssignments = validAssignments.filter((a: any) => a.status === 'COMPLETED');
 
+  const scores = completedAssignments.map((a: any) => Number(a.score) || 0);
+  const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+  const bestScore = scores.length > 0 ? Math.max(...scores) : 0;
+  const passCount = scores.filter(s => s >= 70).length;
+
+  // Global Rank
+  const studentsSnap = await db.collection('users').where('role', '==', 'STUDENT').get();
+  let globalRank = 0;
+  if (studentsSnap.size > 0 && avgScore > 0) {
+    let betterStudents = 0;
+    await Promise.all(studentsSnap.docs.map(async (doc) => {
+      if (doc.id === session.id) return;
+      const aSnap = await db.collection('assignments').where('studentId', '==', doc.id).where('status', '==', 'COMPLETED').get();
+      if (aSnap.empty) return;
+      const userScores = aSnap.docs.map(d => Number(d.data().score) || 0);
+      const userAvg = userScores.reduce((a, b) => a + b, 0) / userScores.length;
+      if (userAvg > avgScore) betterStudents++;
+    }));
+    globalRank = betterStudents + 1;
+  }
+
+  const getScoreInfo = (s: number) => {
+    if (s >= 90) return { label: 'Sangat Baik', colorClass: 'text-green-700', bgClass: 'bg-green-100' };
+    if (s >= 70) return { label: 'Lulus', colorClass: 'text-blue-700', bgClass: 'bg-blue-100' };
+    if (s >= 50) return { label: 'Cukup', colorClass: 'text-yellow-700', bgClass: 'bg-yellow-100' };
+    return { label: 'Perlu Belajar', colorClass: 'text-red-700', bgClass: 'bg-red-100' };
+  };
+
   return (
-    <div className="animate-in">
-      <div className="page-header">
-        <h1>Selamat Datang, {session.name} 👋</h1>
-        <p>Ini adalah daftar paket tryout yang ditugaskan kepada Anda.</p>
+    <div style={{ paddingTop: '8px' }}>
+      {/* Page Title */}
+      <div style={{ marginBottom: '20px' }}>
+        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary, #111)', margin: 0 }}>
+          Halo, {session.name.split(' ')[0]}!
+        </h1>
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary, #666)', marginTop: '4px' }}>
+          Selamat datang di dashboard pribadi kamu. Yuk, lanjutkan belajar hari ini!
+        </p>
       </div>
 
-      {/* Active Assignments Section */}
-      <div style={{ marginBottom: '3rem' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          📝 Daftar Tryout Aktif
-        </h2>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          {/* Grouped by Packages */}
-          {pendingData.grouped.map((pkg) => (
-            <div key={pkg.id} className="package-section">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                <span style={{ fontSize: '1.75rem' }}>📦</span>
-                <div>
-                  <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--primary)' }}>{pkg.name}</h3>
-                  <p className="text-muted text-xs">{pkg.assignments.length} Tryout di dalam paket ini</p>
-                </div>
-              </div>
-              <div className="grid grid-auto" style={{ gap: '1rem' }}>
-                {pkg.assignments.map((assignment: any) => renderAssignmentCard(assignment))}
-              </div>
-            </div>
-          ))}
-
-          {/* Individual Tryouts (No Package) */}
-          {pendingData.individual.length > 0 && (
-            <div className="package-section">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                <span style={{ fontSize: '1.75rem' }}>📄</span>
-                <div>
-                  <h3 style={{ fontSize: '1.125rem', fontWeight: 700 }}>Tryout Mandiri</h3>
-                  <p className="text-muted text-xs">Tryout yang ditugaskan secara individu</p>
-                </div>
-              </div>
-              <div className="grid grid-auto" style={{ gap: '1rem' }}>
-                {pendingData.individual.map((assignment: any) => renderAssignmentCard(assignment))}
-              </div>
-            </div>
-          )}
-
-          {pendingData.grouped.length === 0 && pendingData.individual.length === 0 && (
-            <div className="empty-state">
-              Tidak ada tugas tryout aktif saat ini.
-            </div>
-          )}
+      {/* Stat Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '20px' }}>
+        <div className="card" style={{ padding: '16px' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary, #888)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Rata-rata Nilai</div>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--text-primary, #111)', lineHeight: 1 }}>{avgScore > 0 ? avgScore : '–'}</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary, #888)', marginTop: '4px' }}>dari {completedAssignments.length} tryout selesai</div>
+        </div>
+        <div className="card" style={{ padding: '16px' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary, #888)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Nilai Tertinggi</div>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--primary, #2563eb)', lineHeight: 1 }}>{bestScore > 0 ? bestScore.toFixed(0) : '–'}</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary, #888)', marginTop: '4px' }}>{passCount} kali lulus (nilai ≥70)</div>
+        </div>
+        <div className="card" style={{ padding: '16px' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary, #888)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Menunggu Dikerjakan</div>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--text-primary, #111)', lineHeight: 1 }}>{pendingAssignments.length}</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary, #888)', marginTop: '4px' }}>tryout belum dimulai</div>
+        </div>
+        <div className="card" style={{ padding: '16px' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary, #888)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Peringkat</div>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--text-primary, #111)', lineHeight: 1 }}>#{globalRank || '–'}</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary, #888)', marginTop: '4px' }}>dari seluruh siswa</div>
         </div>
       </div>
 
-      {/* History Section */}
-      <div>
-        <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', color: 'var(--text-muted)' }}>Riwayat Pengerjaan</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          {completedAssignments.map((assignment: any) => (
-            <div key={assignment.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', padding: '0.875rem 1.25rem' }}>
-              <div>
-                <div style={{ fontWeight: 600 }}>{assignment.tryout.title as string}</div>
-                <div className="text-muted text-xs">
-                  {assignment.tryout.packageCategory ? `📦 ${assignment.tryout.packageCategory.name} • ` : ''}
-                  Selesai: {assignment.endTime ? assignment.endTime.toDate().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
-                </div>
+      {/* Ongoing Exam */}
+      {ongoingAssignment && (
+        <div className="card" style={{ padding: '16px', marginBottom: '20px', borderLeft: '3px solid var(--primary, #2563eb)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--primary, #2563eb)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+                ● Sedang Berlangsung
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ textAlign: 'right' }}>
-                  <div className="text-muted" style={{ fontSize: '0.65rem', textTransform: 'uppercase', fontWeight: 700 }}>Skor</div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary)', lineHeight: 1 }}>
-                    {assignment.score?.toFixed(1) || '0'}
-                  </div>
-                </div>
-                <Link href={`/student/tryouts/${assignment.tryout.id}/result`} className="btn btn-outline btn-sm">
-                  Review
-                </Link>
+              <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary, #111)', marginBottom: '4px' }}>
+                {(ongoingAssignment as any).tryout.title}
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary, #888)' }}>
+                {(ongoingAssignment as any).tryout._count.questions} soal
+                {(ongoingAssignment as any).tryout.duration ? ` · ${(ongoingAssignment as any).tryout.duration} menit` : ''}
               </div>
             </div>
-          ))}
-
-          {completedAssignments.length === 0 && (
-            <div className="empty-state">Belum ada tryout yang diselesaikan.</div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function renderAssignmentCard(assignment: any) {
-  const dur = assignment.tryout.duration as number | null;
-  return (
-    <div key={assignment.id} className="card dashboard-assignment-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', overflow: 'hidden' }}>
-      {assignment.status === 'ONGOING' && (
-        <div style={{ position: 'absolute', top: 0, right: 0, padding: '0.3rem 0.75rem', backgroundColor: 'var(--warning)', color: 'white', fontSize: '0.7rem', fontWeight: 800, borderRadius: '0 0 0 10px' }}>
-          MELANJUTKAN
+            <Link
+              href={`/student/tryouts/${(ongoingAssignment as any).tryout.id}`}
+              className="btn btn-primary"
+              style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+            >
+              Lanjutkan
+            </Link>
+          </div>
         </div>
       )}
-      <div style={{ flex: 1 }}>
-        <div style={{ marginBottom: '0.5rem' }}>
-          <span className="badge badge-muted" style={{ fontSize: '0.7rem' }}>{assignment.tryout.category as string}</span>
-        </div>
-        <h3 style={{ fontSize: '1.0625rem', fontWeight: 700, marginBottom: '0.35rem', lineHeight: 1.4 }}>{assignment.tryout.title as string}</h3>
-        <p className="text-muted text-xs" style={{ marginBottom: '1.25rem', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.5 }}>
-          {assignment.tryout.description as string || 'Uji kemampuan Anda dengan latihan soal berkualitas ini.'}
-        </p>
-        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.25rem' }}>
-          <div className="text-muted" style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <span style={{ filter: 'grayscale(100%)' }}>📝</span> <strong>{assignment.tryout._count.questions}</strong> Soal
+
+      {/* Two Column: Pending + Completed */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+
+        {/* Pending Tryouts */}
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border, #e5e7eb)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary, #111)' }}>Tryout Menunggu</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary, #888)', marginTop: '2px' }}>{pendingAssignments.length} belum dikerjakan</div>
+            </div>
           </div>
-          {dur && (
-            <div className="text-muted" style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <span style={{ filter: 'grayscale(100%)' }}>⏱</span> <strong>{dur}</strong> Menit
+          {pendingAssignments.length > 0 ? (
+            <div>
+              {pendingAssignments.slice(0, 5).map((a: any) => (
+                <div key={a.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-light, #f3f4f6)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary, #111)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {a.tryout.title}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary, #888)', marginTop: '2px' }}>
+                      {a.tryout._count.questions} soal{a.tryout.duration ? ` · ${a.tryout.duration} mnt` : ''}
+                    </div>
+                  </div>
+                  <Link href={`/student/tryouts/${a.tryout.id}`} style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary, #2563eb)', flexShrink: 0 }}>
+                    Mulai →
+                  </Link>
+                </div>
+              ))}
+              {pendingAssignments.length > 5 && (
+                <div style={{ padding: '10px 16px', textAlign: 'center' }}>
+                  <Link href="/student/tryouts" style={{ fontSize: '12px', color: 'var(--text-secondary, #888)' }}>
+                    +{pendingAssignments.length - 5} lainnya
+                  </Link>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-secondary, #888)', fontSize: '13px' }}>
+              Semua tryout sudah dikerjakan! 🎉
             </div>
           )}
         </div>
+
+        {/* Completed Tryouts */}
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border, #e5e7eb)' }}>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary, #111)' }}>Riwayat Nilai</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary, #888)', marginTop: '2px' }}>{completedAssignments.length} tryout selesai</div>
+          </div>
+          {completedAssignments.length > 0 ? (
+            <div>
+              {completedAssignments.slice(0, 5).map((a: any) => {
+                const score = Number(a.score) || 0;
+                const info = getScoreInfo(score);
+                return (
+                  <div key={a.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-light, #f3f4f6)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div className={info.bgClass} style={{ width: '40px', height: '40px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <span className={info.colorClass} style={{ fontSize: '13px', fontWeight: 700 }}>{score.toFixed(0)}</span>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary, #111)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {a.tryout.title}
+                      </div>
+                      <div className={info.colorClass} style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', marginTop: '2px' }}>
+                        {info.label}
+                      </div>
+                    </div>
+                    <Link href={`/student/tryouts/${a.tryout.id}/result`} style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary, #2563eb)', flexShrink: 0 }}>
+                      Lihat
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-secondary, #888)', fontSize: '13px' }}>
+              Belum ada tryout yang selesai.
+            </div>
+          )}
+        </div>
+
       </div>
 
-      <Link
-        href={`/student/tryouts/${assignment.tryout.id}`}
-        className={`btn ${assignment.status === 'ONGOING' ? 'btn-warning' : 'btn-primary'}`}
-        style={{ width: '100%', textAlign: 'center', fontSize: '0.875rem', fontWeight: 600, padding: '0.75rem' }}
-      >
-        {assignment.status === 'ONGOING' ? 'Lanjutkan Sekarang' : 'Mulai Ujian'}
-      </Link>
+      {/* Progress Bar Summary */}
+      <div className="card" style={{ padding: '16px', marginTop: '16px' }}>
+        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary, #111)', marginBottom: '12px' }}>Ringkasan Progress</div>
+        <div style={{ marginBottom: '10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary, #888)', marginBottom: '5px' }}>
+            <span>Tryout Diselesaikan</span>
+            <span style={{ fontWeight: 600 }}>{completedAssignments.length} / {validAssignments.length}</span>
+          </div>
+          <div style={{ height: '6px', backgroundColor: 'var(--border-light, #f0f0f0)', borderRadius: '99px', overflow: 'hidden' }}>
+            <div style={{
+              height: '100%',
+              borderRadius: '99px',
+              backgroundColor: 'var(--primary, #2563eb)',
+              width: validAssignments.length > 0 ? `${(completedAssignments.length / validAssignments.length) * 100}%` : '0%',
+              transition: 'width 0.5s ease'
+            }} />
+          </div>
+        </div>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary, #888)', marginBottom: '5px' }}>
+            <span>Tingkat Kelulusan (≥70)</span>
+            <span style={{ fontWeight: 600 }}>{completedAssignments.length > 0 ? Math.round((passCount / completedAssignments.length) * 100) : 0}%</span>
+          </div>
+          <div style={{ height: '6px', backgroundColor: 'var(--border-light, #f0f0f0)', borderRadius: '99px', overflow: 'hidden' }}>
+            <div style={{
+              height: '100%',
+              borderRadius: '99px',
+              backgroundColor: '#22c55e',
+              width: completedAssignments.length > 0 ? `${(passCount / completedAssignments.length) * 100}%` : '0%',
+              transition: 'width 0.5s ease'
+            }} />
+          </div>
+        </div>
+        {completedAssignments.length > 0 && (
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary, #888)', marginTop: '10px' }}>
+            {passCount === completedAssignments.length
+              ? `Luar biasa! Semua tryout yang dikerjakan berhasil lulus.`
+              : `${passCount} dari ${completedAssignments.length} tryout berhasil lulus. Terus semangat!`
+            }
+          </p>
+        )}
+      </div>
+
     </div>
   );
 }

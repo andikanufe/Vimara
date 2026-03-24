@@ -167,6 +167,16 @@ export default async function TryoutResultPage({ params }: { params: Promise<{ i
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
+            {((assignment as any).violationCount || 0) > 0 && (
+              <div style={{
+                color: 'var(--danger)', fontSize: '0.75rem', fontWeight: 700,
+                backgroundColor: 'rgba(220, 38, 38, 0.1)', padding: '4px 8px',
+                borderRadius: '4px', marginBottom: '8px', border: '1px solid var(--danger)',
+                display: 'inline-block'
+              }}>
+                ⚠️ {(assignment as any).violationCount} Indikasi Kecurangan Terdeteksi
+              </div>
+            )}
             <div className="text-muted text-xs font-bold" style={{ textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>Skor Akhir</div>
             <div className="score-circle" style={{
               borderColor: score >= 70 ? 'var(--success)' : score >= 40 ? 'var(--warning)' : 'var(--danger)',
@@ -175,7 +185,13 @@ export default async function TryoutResultPage({ params }: { params: Promise<{ i
               {score.toFixed(0)}
             </div>
             <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <a href={`/print/${tryoutId}`} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', textDecoration: 'none' }}>
+              <a 
+                href={tryoutData.googleDocId ? `/api/export/tryout/${tryoutId}/googledocs` : `/print/${tryoutId}`} 
+                target="_blank" 
+                rel="noreferrer" 
+                className="btn btn-outline btn-sm" 
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', textDecoration: 'none' }}
+              >
                 🖨️ Download Soal (PDF)
               </a>
 

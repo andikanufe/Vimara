@@ -42,6 +42,8 @@ export default function ExamInterface({
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [showAnswerGrid, setShowAnswerGrid] = useState(false);
   const [showWarning, setShowWarning] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [violationCount, setViolationCount] = useState(0);
   const hasAutoSubmitted = useRef(false);
 
   const currentQ = questions[currentIndex];
@@ -71,36 +73,57 @@ export default function ExamInterface({
 
   // --- Anti Cheating Listeners ---
   useEffect(() => {
-    // 1. Detect tab switching / minimizing
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        setShowWarning(true);
+    const handleViolation = async (reason: string) => {
+      setShowWarning(true);
+      setViolationCount(prev => prev + 1);
+      try {
+        await fetch('/api/tryout/violation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assignmentId, reason })
+        });
+      } catch (e) {
+        console.error('Failed to report violation', e);
       }
     };
 
-    // 2. Prevent Right Click (Context Menu)
+    // 1. Detect tab switching / minimizing
+    const handleVisibilityChange = () => {
+      if (document.hidden && isFullscreen) {
+        handleViolation('Tab Switch / Minimize');
+      }
+    };
+
+    // 2. Fullscreen monitor
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement && isFullscreen) {
+        handleViolation('Keluar Fullscreen');
+        setIsFullscreen(false);
+      }
+    };
+
+    // 3. Prevent Right Click (Context Menu)
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
     };
 
-    // 3. Prevent Copy, Cut, Paste
+    // 4. Prevent Copy, Cut, Paste
     const handleCopyPaste = (e: ClipboardEvent) => {
       e.preventDefault();
     };
 
-    // 4. Prevent specific keyboard shortcuts
+    // 5. Prevent specific keyboard shortcuts
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Prevent Ctrl/Cmd + C, V, X, P, S
       if ((e.ctrlKey || e.metaKey) && ['c', 'v', 'x', 'p', 's'].includes(e.key.toLowerCase())) {
         e.preventDefault();
       }
-      // Prevent F12 (Inspect Element)
       if (e.key === 'F12') {
         e.preventDefault();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('contextmenu', handleContextMenu);
     document.addEventListener('copy', handleCopyPaste);
     document.addEventListener('cut', handleCopyPaste);
@@ -109,13 +132,14 @@ export default function ExamInterface({
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('contextmenu', handleContextMenu);
       document.removeEventListener('copy', handleCopyPaste);
       document.removeEventListener('cut', handleCopyPaste);
       document.removeEventListener('paste', handleCopyPaste);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [assignmentId, isFullscreen]);
 
   // Timer logic
   useEffect(() => {
@@ -254,6 +278,46 @@ export default function ExamInterface({
   const timerWarning = timeLeft !== null && timeLeft <= 600 && !timerDanger;
   const time = timeLeft !== null ? formatTimePart(timeLeft) : null;
 
+  const currentQAnswered = !!answers[currentQ?.id] && String(answers[currentQ?.id]).trim() !== '';
+
+  const requestFullscreen = async () => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      } else if ((document.documentElement as any).webkitRequestFullscreen) {
+        await (document.documentElement as any).webkitRequestFullscreen();
+      } else if ((document.documentElement as any).msRequestFullscreen) {
+        await (document.documentElement as any).msRequestFullscreen();
+      }
+      setIsFullscreen(true);
+      setShowWarning(false);
+    } catch (err) {
+      alert('Gagal', 'Perangkat/Browser Anda tidak mendukung fullscreen otomatis atau diblokir.');
+      setIsFullscreen(true); // fallback so they can still take the exam
+      setShowWarning(false);
+    }
+  };
+
+  if (!isFullscreen) {
+    return (
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        minHeight: '100vh', backgroundColor: 'var(--bg-color, #f3f4f6)', padding: '2rem', textAlign: 'center'
+      }}>
+        <div className="card" style={{ maxWidth: '500px', padding: '3rem 2rem' }}>
+          <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🖥️</div>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '1rem' }}>Mode Layar Penuh Diwajibkan</h1>
+          <p style={{ color: 'var(--text-secondary, #666)', marginBottom: '2rem', lineHeight: 1.6 }}>
+            Untuk mencegah kecurangan, ujian ini harus dikerjakan dalam mode layar penuh (Fullscreen). Segala aktivitas keluar dari layar penuh atau berpindah aplikasi akan dicatat sebagai pelanggaran.
+          </p>
+          <button onClick={requestFullscreen} className="btn btn-primary btn-lg" style={{ width: '100%' }}>
+            Masuk Layar Penuh & Mulai Ujian
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="v2-exam-layout">
       {/* Anti-Cheating Warning Overlay */}
@@ -272,13 +336,13 @@ export default function ExamInterface({
           textAlign: 'center'
         }}>
           <h1 style={{ fontSize: '3rem', fontWeight: 800, marginBottom: '1rem' }}>⚠️ PERINGATAN!</h1>
-          <p style={{ fontSize: '1.25rem', maxWidth: '600px', marginBottom: '2rem' }}>
-            Sistem mendeteksi aktivitas mencurigakan (pindah tab atau mengecilkan browser).
+          <p style={{ fontSize: '1.25rem', maxWidth: '600px', marginBottom: '1rem' }}>
+            Sistem mendeteksi aktivitas mencurigakan (pindah tab atau keluar dari mode layar penuh).
             <br /><br />
-            Tindakan ini tercatat di sistem sebagai indikasi kecurangan. Harap tetap berada di halaman ujian hingga waktu habis.
+            Tindakan ini tercatat di sistem sebagai indikasi kecurangan (Total peringatan: {violationCount}).
           </p>
           <button
-            onClick={() => setShowWarning(false)}
+            onClick={requestFullscreen}
             style={{
               padding: '1rem 2rem',
               fontSize: '1.125rem',
@@ -290,7 +354,7 @@ export default function ExamInterface({
               cursor: 'pointer'
             }}
           >
-            Saya Mengerti & Kembali ke Ujian
+            Saya Mengerti & Kembali ke Layar Penuh
           </button>
         </div>
       )}
@@ -519,7 +583,7 @@ export default function ExamInterface({
 
         <div className="v2-bottom-right">
           <span className="v2-save-status">
-            {isSaving ? '💾 Menyimpan...' : '✓ Tersimpan'}
+            {isSaving ? '💾 Menyimpan...' : (currentQAnswered ? '✓ Tersimpan' : '')}
           </span>
           <button className="v2-bottom-btn primary" onClick={goNext} disabled={currentIndex === questions.length - 1} title="Soal Selanjutnya" style={{ padding: '0.5rem' }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
