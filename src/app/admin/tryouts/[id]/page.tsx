@@ -2,7 +2,6 @@ import { notFound } from 'next/navigation';
 import { db } from '@/lib/firebase-admin';
 import Link from 'next/link';
 import QuestionList from './QuestionList';
-import GoogleDocsButton from './GoogleDocsButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,11 +72,6 @@ export default async function TryoutDetailPage({ params }: { params: Promise<{ i
             )}
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <GoogleDocsButton 
-              tryoutId={tryoutId} 
-              googleDocUrl={tryoutData.googleDocUrl as string | null} 
-            />
-
             <a href={`/print/${tryoutDoc.id}`} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ background: 'var(--bg-color)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.375rem', textDecoration: 'none', color: 'inherit' }}>
               🖨️ Print Soal (Lokal)
             </a>

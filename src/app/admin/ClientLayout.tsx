@@ -17,6 +17,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navItems = [
     { name: 'Dashboard', path: '/admin/dashboard', icon: '📊' },
     { name: 'Manajemen Latihan', path: '/admin/tryouts', icon: '📝' },
+    { name: 'Import Soal', path: '/admin/import', icon: '📥' },
     { name: 'Paket Soal', path: '/admin/packages', icon: '📦' },
     { name: 'Analisis Soal', path: '/admin/analytics', icon: '📈' },
     { name: 'Kelola Siswa', path: '/admin/students/manage', icon: '👤' },

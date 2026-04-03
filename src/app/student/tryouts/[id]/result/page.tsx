@@ -186,7 +186,7 @@ export default async function TryoutResultPage({ params }: { params: Promise<{ i
             </div>
             <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               <a 
-                href={tryoutData.googleDocId ? `/api/export/tryout/${tryoutId}/googledocs` : `/print/${tryoutId}`} 
+                href={`/print/${tryoutId}`} 
                 target="_blank" 
                 rel="noreferrer" 
                 className="btn btn-outline btn-sm" 

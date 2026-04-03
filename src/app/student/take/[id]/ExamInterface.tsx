@@ -490,7 +490,7 @@ export default function ExamInterface({
                   autoFocus
                 />
                 <div className="text-xs text-muted" style={{ marginTop: '0.5rem' }}>
-                  💡 Jawaban tidak case-sensitive
+                  💡 Jawaban berupa bilangan bulat (tanpa titik/koma), misal: 1000. Jawaban tidak case-sensitive.
                 </div>
               </div>
             ) : isBenarSalah ? (
