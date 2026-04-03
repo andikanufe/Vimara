@@ -102,10 +102,18 @@ function parseBlock(raw: string): ParsedQuestion | null {
   const pembahasanMatch = cleaned.match(/Pembahasan:\s*([\s\S]*)/i);
   const pembahasan = pembahasanMatch ? pembahasanMatch[1].trim() : '';
 
-  if (!questionText) return null;
-
   let finalQuestionText = questionText;
   let finalPembahasan = pembahasan;
+
+  const beforeSoalMatch = cleaned.split(/Soal:/i)[0];
+  if (beforeSoalMatch) {
+    const markers = beforeSoalMatch.match(/\[GAMBAR_\d+\]|\[img\][\s\S]*?\[\/img\]/gi);
+    if (markers) {
+      finalQuestionText = markers.join('\n\n') + '\n\n' + finalQuestionText;
+    }
+  }
+
+  if (!finalQuestionText.trim()) return null;
 
   blocks.forEach((code, index) => {
     if (code) {
