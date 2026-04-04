@@ -83,7 +83,7 @@ function parseBlock(raw: string): ParsedQuestion | null {
   const explicitType = typeMatch ? typeMatch[1] : null;
 
   // Extract "Soal:" section
-  const soalMatch = cleaned.match(/Soal:\s*([\s\S]*?)(?:^[a-e]\.|^[1-5]\.|Kunci Jawaban:|$)/im);
+  const soalMatch = cleaned.match(/(?:^|\n)Soal:\s*([\s\S]*?)(?=\n\s*[a-e]\.|\n\s*[1-5]\.|\n\s*Kunci Jawaban:|$)/i);
   const questionText = soalMatch ? soalMatch[1].trim() : '';
 
   // Extract options block (a. ... b. ... etc or 1. ... 2. ... etc)
@@ -105,7 +105,7 @@ function parseBlock(raw: string): ParsedQuestion | null {
   let finalQuestionText = questionText;
   let finalPembahasan = pembahasan;
 
-  const beforeSoalMatch = cleaned.split(/Soal:/i)[0];
+  const beforeSoalMatch = cleaned.split(/(?:^|\n)Soal:/i)[0];
   if (beforeSoalMatch) {
     const markers = beforeSoalMatch.match(/\[GAMBAR_\d+\]|\[img\][\s\S]*?\[\/img\]/gi);
     if (markers) {

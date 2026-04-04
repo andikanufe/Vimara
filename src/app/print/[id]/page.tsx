@@ -61,105 +61,126 @@ export default async function PrintTryoutPage({ params }: { params: Promise<{ id
     const questions = questionsData;
 
     return (
-        <div id="printable-area" style={{ backgroundColor: 'white', color: 'black', fontFamily: 'sans-serif', fontSize: '11px', width: '100%' }}>
+        <div id="printable-area" style={{ backgroundColor: 'white', color: 'black', fontFamily: "'Plus Jakarta Sans', 'Inter', sans-serif", fontSize: '11px', width: '100%' }}>
             <PrintClientHelper fileName={safeFileName} />
 
-            {/* Minimalist Header for Print Efficiency */}
-            <div style={{ paddingBottom: '0.75rem', borderBottom: '2px solid #000', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                <div>
-                    <h1 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 0.1rem 0', color: '#000' }}>Lembar Aktivitas Siswa</h1>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#333' }}>
-                        {tryoutData.title} <span style={{ margin: '0 0.3rem' }}>•</span> {tryoutData.category}
+            {/* Minimalist Modern Header */}
+            <div className="print-header" style={{ display: 'flex', alignItems: 'flex-start', paddingBottom: '1rem', borderBottom: '2px solid #F1F5F9', marginBottom: '2rem' }}>
+                <div style={{ flex: 1, paddingRight: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#3B82F6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{tryoutData.category}</span>
+                        <span style={{ color: '#CBD5E1' }}>•</span>
+                        <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 500 }}>Doc. {tryoutId.substring(0, 8).toUpperCase()}</span>
                     </div>
+                    <h1 style={{ fontSize: '1.7rem', fontWeight: 800, margin: '0 0 0.25rem 0', color: '#0F172A', lineHeight: 1.2 }}>{tryoutData.title}</h1>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1E293B', marginBottom: tryoutData.description ? '0.4rem' : '0' }}>
+                        Paket: {packageName}
+                    </div>
+                    {tryoutData.description && (
+                        <div style={{ fontSize: '0.9rem', color: '#475569', lineHeight: 1.5, marginTop: '0.5rem' }}>
+                            {tryoutData.description}
+                        </div>
+                    )}
                 </div>
-                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                    <img src="/vimara-logo.svg" alt="Vimara Logo" style={{ height: '24px', objectFit: 'contain', marginBottom: '4px' }} className="print-logo" />
+                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'flex-start' }}>
+                    <img src="/vimara-logo.svg" alt="Vimara Logo" style={{ height: '32px', objectFit: 'contain', marginBottom: '0.6rem' }} className="print-logo" />
                     <PrintWatermark userName={session?.name} userEmail={session?.username} />
                 </div>
             </div>
 
-            {/* Two Column Layout for Questions */}
-            <div style={{ columns: '2', columnGap: '1.25rem', padding: '0 1.25rem 1rem 1.25rem' }}>
+            {/* Card Layout for Questions */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                 {questions.map((q: any, idx) => {
                     const qType = q.questionType as string;
                     const imgUrl = q.imageUrl as string | null;
 
                     return (
-                        <div key={q.id} className="question-block" style={{ breakInside: 'avoid', marginBottom: '1.25rem', pageBreakInside: 'avoid' }}>
-                            <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
-                                <div style={{ fontWeight: 'bold', minWidth: '16px' }}>{idx + 1}.</div>
-                                <div style={{ flex: 1 }}>
-                                    {imgUrl && (
-                                        <div style={{ marginBottom: '0.4rem' }}>
-                                            <img 
-                                                src={imgUrl} 
-                                                alt="Soal" 
-                                                style={{ 
-                                                    display: 'block',
-                                                    margin: '0 auto',
-                                                    maxWidth: '100%', 
-                                                    width: 'auto',
-                                                    height: 'auto', 
-                                                    maxHeight: '350px', 
-                                                    objectFit: 'contain', 
-                                                    borderRadius: '4px', 
-                                                    border: '1px solid #ddd' 
-                                                }} 
-                                            />
-                                        </div>
-                                    )}
-                                    <div style={{ marginBottom: '0.4rem', lineHeight: 1.3 }}>
-                                        <MathText text={q.questionText as string} />
+                        <div key={q.id} className="question-card" style={{ 
+                            display: 'flex', 
+                            border: '1px solid #E2E8F0', 
+                            borderRadius: '12px', 
+                            overflow: 'hidden',
+                            pageBreakInside: 'avoid',
+                            breakInside: 'avoid'
+                        }}>
+                            {/* Left Side: Question Content */}
+                            <div style={{ flex: '0 0 50%', padding: '1.25rem', borderRight: '1px dashed #CBD5E1' }}>
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                                    <div style={{ fontWeight: 'bold', minWidth: '1.4rem', marginTop: '1px' }}>
+                                        {String(idx + 1).padStart(2, '0')}.
                                     </div>
+                                    <div style={{ flex: 1 }}>
+                                        {imgUrl && (
+                                            <div style={{ marginBottom: '0.5rem' }}>
+                                                <img 
+                                                    src={imgUrl} 
+                                                    alt="Soal" 
+                                                    style={{ display: 'block', margin: '0 auto', maxWidth: '100%', height: 'auto', maxHeight: '350px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #ddd' }} 
+                                                />
+                                            </div>
+                                        )}
+                                        <div style={{ marginBottom: '0.8rem', lineHeight: 1.4 }}>
+                                            <MathText text={q.questionText as string} />
+                                        </div>
 
-                                    {qType === 'ISIAN' ? (
-                                        <div style={{ marginTop: '1.25rem', borderBottom: '1px dotted #999', width: '100%' }}></div>
-                                    ) : qType === 'BENAR_SALAH' ? (
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #ddd', marginTop: '0.3rem', fontSize: '0.75rem' }}>
-                                            <thead>
-                                                <tr>
-                                                    <th style={{ padding: '0.15rem', border: '1px solid #ddd', textAlign: 'left' }}>Pernyataan</th>
-                                                    <th style={{ padding: '0.15rem', border: '1px solid #ddd', width: '22px', textAlign: 'center' }}>B</th>
-                                                    <th style={{ padding: '0.15rem', border: '1px solid #ddd', width: '22px', textAlign: 'center' }}>S</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
+                                        {/* Options */}
+                                        {qType === 'ISIAN' ? (
+                                            <div style={{ marginTop: '2rem', borderBottom: '1px dotted #999', width: '100%' }}></div>
+                                        ) : qType === 'BENAR_SALAH' ? (
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #E5E7EB', marginTop: '0.5rem', fontSize: '0.75rem' }}>
+                                                <thead>
+                                                    <tr style={{ backgroundColor: '#F8FAFC' }}>
+                                                        <th style={{ padding: '0.2rem 0.4rem', border: '1px solid #E5E7EB', textAlign: 'left' }}>Pernyataan</th>
+                                                        <th style={{ padding: '0.2rem 0.4rem', border: '1px solid #E5E7EB', width: '28px', textAlign: 'center' }}>B</th>
+                                                        <th style={{ padding: '0.2rem 0.4rem', border: '1px solid #E5E7EB', width: '28px', textAlign: 'center' }}>S</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {['A', 'B', 'C', 'D', 'E'].map(opt => {
+                                                        const optionText = q[`option${opt}`] as string | null;
+                                                        if (!optionText) return null;
+                                                        return (
+                                                            <tr key={opt}>
+                                                                <td style={{ padding: '0.2rem 0.4rem', border: '1px solid #E5E7EB' }}><MathText text={optionText} /></td>
+                                                                <td style={{ padding: '0.2rem 0.4rem', border: '1px solid #E5E7EB', textAlign: 'center' }}></td>
+                                                                <td style={{ padding: '0.2rem 0.4rem', border: '1px solid #E5E7EB', textAlign: 'center' }}></td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        ) : (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.8rem' }}>
                                                 {['A', 'B', 'C', 'D', 'E'].map(opt => {
-                                                    const optionText = q[`option${opt}`] as string | null;
-                                                    if (!optionText) return null;
+                                                    const optText = q[`option${opt}`];
+                                                    if (!optText) return null;
                                                     return (
-                                                        <tr key={opt}>
-                                                            <td style={{ padding: '0.15rem', border: '1px solid #ddd' }}><MathText text={optionText} /></td>
-                                                            <td style={{ padding: '0.15rem', border: '1px solid #ddd', textAlign: 'center' }}></td>
-                                                            <td style={{ padding: '0.15rem', border: '1px solid #ddd', textAlign: 'center' }}></td>
-                                                        </tr>
+                                                        <div key={opt} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                                                            {qType === 'PGK' ? (
+                                                                <div style={{ minWidth: '12px', height: '12px', border: '1px solid #4B5563', borderRadius: '3px', marginTop: '3px' }}></div>
+                                                            ) : (
+                                                                <span style={{ minWidth: '18px', fontWeight: 600 }}>({opt})</span>
+                                                            )}
+                                                            <span style={{ flex: 1 }}><MathText text={optText as string} /></span>
+                                                        </div>
                                                     );
                                                 })}
-                                            </tbody>
-                                        </table>
-                                    ) : (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', fontSize: '0.75rem' }}>
-                                            {['A', 'B', 'C', 'D', 'E'].map(opt => {
-                                                const optText = q[`option${opt}`];
-                                                if (!optText) return null;
-                                                return (
-                                                    <div key={opt} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.3rem' }}>
-                                                        {qType === 'PGK' ? (
-                                                            <div style={{ minWidth: '12px', height: '12px', border: '1px solid #333', borderRadius: '2px', marginTop: '2px' }}></div>
-                                                        ) : (
-                                                            <span style={{ minWidth: '12px' }}>{opt}.</span>
-                                                        )}
-                                                        <span style={{ flex: 1 }}><MathText text={optText as string} /></span>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
+                            
+                            {/* Right Side: Scratchpad Grid Area (35%) */}
+                            <div className="scratchpad-grid" style={{ flex: '1', backgroundColor: '#F8FAFC' }}></div>
                         </div>
                     );
                 })}
+            </div>
+            
+            {/* Fixed Print Footer (Repeats on every page) */}
+            <div className="print-footer">
+                &copy; {new Date().getFullYear()} Vimara | Sarana Latihan Online. All rights reserved.
             </div>
         </div>
     );

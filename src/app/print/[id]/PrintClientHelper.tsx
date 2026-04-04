@@ -11,25 +11,24 @@ export function PrintWatermark({ userName, userEmail }: { userName?: string, use
 
     if (!userName || !timeStr) return null;
     return (
-        <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.5rem', fontWeight: 500 }}>
-            Diunduh oleh: <strong>{userName}</strong> ({userEmail}) • {timeStr}
+        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, textAlign: 'right' }}>
+            Diunduh oleh: <strong>{userName}</strong><br/>
+            <span style={{ fontSize: '0.7rem' }}>{timeStr}</span>
         </div>
     );
 }
 
 export default function PrintClientHelper({ fileName }: { fileName?: string }) {
-    const [isReady, setIsReady] = useState(false);
-    const [showModal, setShowModal] = useState(false);
+    const [status, setStatus] = useState<'loading' | 'ready'>('loading');
+    const [progress, setProgress] = useState<{ total: number, done: number } | null>(null);
 
     useEffect(() => {
         let cancelled = false;
 
         const waitForImages = async (images: HTMLImageElement[]) => {
             await Promise.all(images.map((img) => {
-                // Force eager/decode in print flow to avoid long tail from deferred image loading.
                 img.loading = 'eager';
                 img.decoding = 'async';
-
                 if (img.complete) return Promise.resolve();
                 return new Promise<void>((resolve) => {
                     const done = () => {
@@ -43,27 +42,38 @@ export default function PrintClientHelper({ fileName }: { fileName?: string }) {
             }));
         };
 
-        const waitForGraphs = async (maxMs: number) => {
-            const start = Date.now();
-            while (Date.now() - start < maxMs) {
+        const waitForGraphs = async () => {
+            while (true) {
+                if (cancelled) return;
                 const allGraphs = Array.from(document.querySelectorAll('[data-rendering]'));
-                const graphsReady = allGraphs.every(el => el.getAttribute('data-rendering') === 'false');
-                if (graphsReady) return;
-                await new Promise((r) => setTimeout(r, 200));
+                const renderingList = allGraphs.filter(el => el.getAttribute('data-rendering') === 'true');
+                
+                const totalCount = allGraphs.length;
+                const activeCount = renderingList.length;
+                const doneCount = totalCount - activeCount;
+
+                setProgress({ total: totalCount, done: doneCount });
+
+                if (activeCount === 0) return;
+                await new Promise((r) => setTimeout(r, 500));
             }
         };
 
         const preparePrint = async () => {
             const printableRoot = document.getElementById('printable-area') ?? document.body;
             const images = Array.from(printableRoot.querySelectorAll('img'));
+            
+            // Wait for images with 30s timeout
             const imageWait = waitForImages(images);
-            const timeout = new Promise<void>((resolve) => setTimeout(resolve, 10000));
+            const imageTimeout = new Promise<void>((resolve) => setTimeout(resolve, 30000));
+            await Promise.race([imageWait, imageTimeout]);
 
-            await Promise.race([imageWait, timeout]);
-            await waitForGraphs(10000);
+            // Wait for Python Graphs INDEFINITELY because Pyodide can take extremely long 
+            // for heavily intensive graphic tests, as requested.
+            await waitForGraphs();
 
             if (!cancelled) {
-                setIsReady(true);
+                setStatus('ready');
             }
         };
 
@@ -72,22 +82,16 @@ export default function PrintClientHelper({ fileName }: { fileName?: string }) {
     }, []);
 
     const handlePrint = () => {
-        setShowModal(true);
+        const originalTitle = document.title;
+        if (fileName) {
+            document.title = fileName;
+        }
 
-        // Wait briefly so user reads the instructions, then set title & trigger print
-        setTimeout(() => {
-            const originalTitle = document.title;
-            if (fileName) {
-                document.title = fileName;
-            }
+        window.print();
 
-            window.print();
-
-            if (fileName) {
-                document.title = originalTitle;
-            }
-            setShowModal(false);
-        }, 3000);
+        if (fileName) {
+            document.title = originalTitle;
+        }
     };
 
     return (
@@ -99,7 +103,7 @@ export default function PrintClientHelper({ fileName }: { fileName?: string }) {
                 @media print {
                     @page {
                         size: A4 portrait;
-                        margin: 1cm 1.5cm; /* Standard professional paper margins */
+                        margin: 1cm 1.5cm 1.5cm 1.5cm; /* Increased bottom margin for footer */
                     }
                     body {
                         -webkit-print-color-adjust: exact;
@@ -117,17 +121,32 @@ export default function PrintClientHelper({ fileName }: { fileName?: string }) {
                         padding: 0 !important;
                     }
 
+                    /* Fixed Print Footer */
+                    .print-footer {
+                        position: fixed;
+                        bottom: 0;
+                        left: 0;
+                        right: 0;
+                        text-align: center;
+                        font-size: 9px;
+                        color: #64748b;
+                        padding-top: 6px;
+                        border-top: 1px dashed #cbd5e1;
+                    }
+
                     /* 
                        LAYOUT OPTIMIZATION 
-                       Prevent large empty gaps by allowing questions to naturally flow
-                       but strictly prevent inner contents (images, tables, options) from slicing in half.
                     */
-                    .question-block {
-                        page-break-inside: avoid !important; /* FORBID splitting a question in half */
+                    .question-card {
+                        page-break-inside: avoid !important;
                         break-inside: avoid !important;
-                        margin-bottom: 2rem !important; /* Consistent spacing between questions */
-                        border-bottom: 1px solid #eee !important;
-                        padding-bottom: 1rem !important;
+                    }
+                    
+                    /* Grid background pattern for the scratchpad */
+                    .scratchpad-grid {
+                        background-image: radial-gradient(#CBD5E1 1px, transparent 1px) !important;
+                        background-size: 20px 20px !important;
+                        background-position: 0 0 !important;
                     }
 
                     /* Prevent atomic components from being sliced in half horizontally */
@@ -153,83 +172,55 @@ export default function PrintClientHelper({ fileName }: { fileName?: string }) {
                         page-break-inside: avoid !important; 
                     }
                     
-                    /* Optional utility for the header logo */
                     .print-logo {
-                        height: 24px !important;
+                        height: 32px !important;
                         width: auto !important;
                     }
                 }
                 
                 @media screen {
                     .no-print { display: block !important; }
+                    .print-footer {
+                        margin-top: 2rem; border-top: 1px solid #E5E7EB; padding-top: 1rem; text-align: center; font-size: 0.75rem; color: #64748b;
+                    }
                     .floating-controls {
-                        position: fixed; top: 1rem; right: 1rem; display: flex; gap: 0.5rem;
-                        z-index: 1000; background: white; padding: 0.75rem; border-radius: 8px;
-                        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); border: 1px solid #e5e7eb;
+                        position: fixed; top: 1.5rem; right: 1.5rem; display: flex; gap: 0.5rem;
+                        z-index: 1000; background: white; padding: 0.5rem 0.75rem; border-radius: 8px;
+                        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); 
+                        border: 1px solid #e2e8f0; align-items: center;
                     }
                     .btn-print {
-                        background: #2563EB; color: white; padding: 0.5rem 1rem;
-                        border-radius: 6px; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s;
+                        background: #1E293B; color: white; padding: 0.4rem 0.8rem;
+                        border-radius: 6px; font-weight: 500; border: none; cursor: pointer; transition: all 0.2s; font-size: 13px;
                     }
                     .btn-print:disabled { background: #94a3b8; cursor: not-allowed; }
+                    .btn-print:hover:not(:disabled) { background: #0F172A; }
                     .btn-back {
-                        background: white; color: #475569; padding: 0.5rem 1rem; border-radius: 6px;
-                        font-weight: 600; border: 1px solid #e2e8f0; cursor: pointer; text-decoration: none; font-size: 14px;
+                        background: white; color: #475569; padding: 0.4rem 0.8rem; border-radius: 6px;
+                        font-weight: 600; border: 1px solid #e2e8f0; cursor: pointer; text-decoration: none; font-size: 13px;
                     }
-                    .print-modal-overlay {
-                        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-                        background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;
-                        z-index: 9999; backdrop-filter: blur(4px);
-                    }
-                    .print-modal {
-                        background: white; border-radius: 12px; padding: 2.5rem; max-width: 450px;
-                        text-align: center; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-                        animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-                    }
-                    @keyframes popIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+                    .btn-back:hover { background: #F8FAFC; }
                 }
             `}} />
-
-            {showModal && (
-                <div className="no-print print-modal-overlay">
-                    <div className="print-modal">
-                        <div style={{ fontSize: '3.5rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-                            🖨️ 📄
-                        </div>
-                        <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', marginBottom: '1rem', lineHeight: '1.4' }}>
-                            Membuka Jendela PDF Asli...
-                        </h3>
-                        <div style={{ fontSize: '0.95rem', color: '#334155', lineHeight: '1.6', textAlign: 'left', backgroundColor: '#f8fafc', padding: '1.25rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
-                            <p style={{ margin: '0 0 0.75rem 0', fontWeight: 700, color: '#1e293b' }}>Langkah Menyimpan PDF Profesional:</p>
-                            <ol style={{ margin: 0, paddingLeft: '1.25rem' }}>
-                                <li style={{ marginBottom: '0.5rem' }}>Ubah Tujuan (Destination) ke <strong>Simpan sebagai PDF (Save as PDF)</strong>.</li>
-                                <li style={{ marginBottom: '0.5rem' }}>Pada mode Ukuran/Kertas, pilih <strong>A4</strong>.</li>
-                                <li>Klik tombol <strong>Simpan (Save)</strong>.</li>
-                            </ol>
-                        </div>
-                        <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center', gap: '8px', alignItems: 'center' }}>
-                            <div style={{ width: '22px', height: '22px', border: '3px solid #cbd5e1', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 1.2s linear infinite' }} />
-                            <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-                            <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 500 }}>Mohon tunggu 3 detik...</span>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             <div className="no-print floating-controls" data-html2canvas-ignore="true">
                 <button
                     onClick={() => window.location.href = '/student/dashboard'}
                     className="btn-back"
-                    disabled={showModal}
                 >
-                    ← Kembali
+                    Kembali
                 </button>
+                <div style={{ width: '1px', height: '20px', background: '#E2E8F0', margin: '0 4px' }}></div>
                 <button
                     onClick={handlePrint}
-                    disabled={!isReady || showModal}
+                    disabled={status === 'loading'}
                     className="btn-print"
                 >
-                    {!isReady ? '⏳ Menyusun Data...' : showModal ? '🔄 Membuka Print...' : '🖨️ Simpan PDF Asli'}
+                    {status === 'loading' 
+                        ? (progress && progress.total > 0 
+                            ? `⏳ Memuat Grafik (${progress.done}/${progress.total})...` 
+                            : '⏳ Menyiapkan Dokumen...') 
+                        : '🖨️ Cetak / Simpan PDF'}
                 </button>
             </div>
         </>

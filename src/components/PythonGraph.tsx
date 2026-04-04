@@ -129,7 +129,7 @@ img_b64
 
 export default function PythonGraph({ code, deferUntilVisible = true }: { code: string; deferUntilVisible?: boolean }) {
     const [imgSrc, setImgSrc] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isPyodideReady, setIsPyodideReady] = useState(false);
     const [isVisible, setIsVisible] = useState(!deferUntilVisible);
@@ -217,8 +217,8 @@ export default function PythonGraph({ code, deferUntilVisible = true }: { code: 
             {error && <div style={{ padding: '1rem', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', color: '#dc2626', fontSize: '14px', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>{error}</div>}
 
             {imgSrc && !loading && (
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <img src={imgSrc} alt="Python Generated Graph" style={{ maxWidth: '100%', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                <div style={{ display: 'flex', justifyContent: 'flex-start', margin: '0.5rem 0' }}>
+                    <img src={imgSrc} alt="Python Generated Graph" style={{ maxWidth: '180px', maxHeight: '180px', width: 'auto', height: 'auto', objectFit: 'contain' }} />
                 </div>
             )}
         </div>

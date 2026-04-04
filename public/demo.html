@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo Ujian Interaktif Vimara</title>
+    <!-- Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Engine KaTeX (Matematika) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+    <!-- Engine HTML to PDF Independent -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #2563EB;
+            --primary-hover: #1D4ED8;
+            --bg-color: #F8FAFC;
+            --card-bg: #FFFFFF;
+            --text-main: #0F172A;
+            --text-muted: #64748B;
+            --border: #E2E8F0;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); line-height: 1.6; }
+        
+        /* Navbar */
+        .navbar { background-color: var(--card-bg); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 50;}
+        .logo { font-size: 1.5rem; font-weight: 800; color: var(--primary); letter-spacing: -0.5px; }
+        .exam-title-nav { font-weight: 600; font-size: 1rem; color: var(--text-muted); }
+        .timer-badge { font-weight: 700; color: #DC2626; background: #FEF2F2; padding: 0.5rem 1rem; border-radius: 8px; border: 1px solid #FCA5A5; display: flex; align-items: center; gap: 0.5rem;}
+        
+        .container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+        .app-grid { display: grid; grid-template-columns: 1fr 300px; gap: 2rem; align-items: start; }
+        .card { background: var(--card-bg); border-radius: 16px; border: 1px solid var(--border); padding: 2rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+        
+        .header-title { font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; color: var(--text-main); }
+        .badge { background: #DBEAFE; color: #1E40AF; padding: 0.3rem 0.8rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; display: inline-block; margin-bottom: 1rem;}
+        
+        /* Buttons */
+        .btn { padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; transition: 0.2s; font-size: 0.95rem; display: inline-flex; align-items: center; justify-content: center; gap:0.5rem;}
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-outline { background: white; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-outline:hover:not(:disabled) { background: #F1F5F9; }
+        .btn-primary { background: var(--primary); color: white; box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.39); }
+        .btn-primary:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn-success { background: #10B981; color: white; box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.39); }
+
+        /* Questions */
+        .q-number-header { font-size: 1.25rem; font-weight: 800; color: var(--primary); margin-bottom: 1.5rem; border-bottom: 2px dashed var(--border); padding-bottom: 1rem; display: flex; justify-content: space-between;}
+        .q-text { font-size: 1.1rem; margin-bottom: 1.5rem; line-height: 1.8; }
+        
+        /* Options */
+        .opt-row { display: flex; align-items: center; gap: 1rem; padding: 0.8rem 1.25rem; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; margin-bottom: 0.75rem; transition: 0.2s;}
+        .opt-row:hover { border-color: var(--primary); background: #EFF6FF; }
+        .opt-row.selected { border-color: var(--primary); background: #EFF6FF; box-shadow: 0 0 0 2px var(--primary); }
+        .opt-bullet { width: 32px; height: 32px; border-radius: 50%; background: #F1F5F9; display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--text-muted); flex-shrink:0;}
+        .opt-row.selected .opt-bullet { background: var(--primary); color: white; }
+        
+        .opt-checkbox { width: 24px; height: 24px; border-radius: 6px; border: 2px solid var(--text-muted); display: flex; align-items: center; justify-content: center; background: white; flex-shrink:0;}
+        .opt-row.selected .opt-checkbox { background: var(--primary); border-color: var(--primary); }
+        .opt-row.selected .opt-checkbox::after { content: '✓'; color: white; font-weight: bold; }
+
+        .true-false-table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
+        .true-false-table th, .true-false-table td { border: 1px solid var(--border); padding: 0.75rem; text-align: center; }
+        .true-false-table th:first-child, .true-false-table td:first-child { text-align: left; }
+        .true-false-table input[type="radio"] { transform: scale(1.5); cursor: pointer; }
+
+        .text-input { width: 100%; padding: 1rem; border: 2px solid var(--border); border-radius: 8px; font-size: 1.1rem; outline: none; transition: 0.2s; }
+        .text-input:focus { border-color: var(--primary); }
+
+        /* Grid Sidebar */
+        .grid-nav { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; margin-top: 1rem;}
+        .grid-item { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); color: var(--text-muted); transition: 0.2s;}
+        .grid-item.active { border-color: var(--primary); color: var(--primary); border-width: 2px; }
+        .grid-item.answered { background: var(--primary); color: white; border-color: var(--primary); }
+        
+        /* Discussion View */
+        .correct-ans { background-color: #D1FAE5; border-color: #059669; }
+        .wrong-ans { background-color: #FEE2E2; border-color: #DC2626; }
+        
+        /* Generate PDF Wrapper specific */
+        #printArea { background: white; color: black; padding: 2rem; display: none; }
+        #printArea .pdf-q-card { border: 1px solid #CCC; border-radius: 12px; margin-bottom: 2rem; overflow: hidden; display: flex;}
+        #printArea .pdf-q-left { flex: 0 0 55%; padding: 1.5rem; border-right: 1px dashed #CCC;}
+        #printArea .pdf-q-right { flex: 1; padding: 1.5rem; background: #F8FAFC;}
+
+        @media (max-width: 800px) {
+            .app-grid { grid-template-columns: 1fr; }
+            .sidebar-area { grid-row: 1; } 
+            .exam-title-nav { display: none; }
+            #printArea .pdf-q-card { flex-direction: column; }
+            #printArea .pdf-q-left { border-right: none; border-bottom: 1px dashed #ccc;}
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">Vimara.</div>
+        <div class="exam-title-nav">LMS Demo: Tryout Matematika</div>
+        <div class="timer-badge" id="timerBadge">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span id="timeDisplay">15:00</span>
+        </div>
+    </nav>
+
+    <div class="container" id="app">
+        <!-- Rendered by JS -->
+    </div>
+
+    <!-- Hidden Area for PDF Generation Extraction Engine -->
+    <div id="printArea"></div>
+
+    <script>
+        // Data UTBK (Topik: Lingkaran - 4 Tipe Soal)
+        const exData = {
+            title: "Simulasi SNBT 2026: Matematika (Modul Lingkaran)",
+            category: "MATEMATIKA WAJIB",
+            desc: "Paket demonstrasi simulasi ujian terdiri dari 4 variasi tipe soal sesuai instrumen pengujian terbaru di kurikulum merdeka (Pilihan Ganda, PG Kompleks, Benar-Salah, dan Isian Singkat).",
+            duration: 900, // 15 mins
+            questions: [
+                {
+                    id: 1, type: "PG", 
+                    text: 'Diketahui sebuah lingkaran berpusat pada titik asal koordinat Cartesian $O(0,0)$. Jika lingkaran tersebut memiliki panjang jari-jari persis sebesar $5$ satuan, maka bentuk umum aljabar persamaannya adalah...',
+                    options: ['$x^2 + y^2 = 5$', '$x^2 + y^2 = 10$', '$x^2 + y^2 = 25$', '$x^2 + y^2 = 50$', '$x^2 + y^2 = 125$'],
+                    key: "C", 
+                    discuss: 'Bentuk murni persamaan lingkaran yang berpusat di titk $O(0,0)$ dapat dirumuskan dengan fungsi $x^2 + y^2 = r^2$.\nKarena besaran jari-jarinya $r = 5$, maka ketika disubstitusi $r^2 = 25$. \n\nSehingga persamaan utuh yang dibentuk secara koheren adalah $x^2 + y^2 = 25$.'
+                },
+                {
+                    id: 2, type: "ISIAN", 
+                    text: 'Diketahui persamaan diferensial lintasan gerak berbentuk bundar sempurna tercatat pada sebuah radar astronomikal dengan struktur fungsi umum:\n\n$$x^2 + y^2 - 4x + 6y - 12 = 0$$\n\nHitunglah menggunakan rumus determinan, tepat berapakah total panjang jari-jari efektif lintasannya? *(Ketik jawaban dalam angka utuh murni tanpa spasi)*',
+                    key: "5",
+                    discuss: 'Identifikasi konstanta persamaan: $A = -4, B = 6, C = -12$.\nMenghitung rumus mutlak lintasan garis keliling:\n$r = \\sqrt{(-\\frac{A}{2})^2 + (-\\frac{B}{2})^2 - C}$\n$r = \\sqrt{(-\\frac{-4}{2})^2 + (-\\frac{6}{2})^2 - (-12)}$\n$r = \\sqrt{(2)^2 + (-3)^2 + 12}$\n$r = \\sqrt{4 + 9 + 12}$\n$r = \\sqrt{25}$\n$r = 5$ satuan wilayah presisi.'
+                },
+                {
+                    id: 3, type: "PGK", 
+                    text: 'Hukum probabilitas spasial memberikan batas edar berupa persamaan wilayah $x^2 + y^2 = 100$. Pada saat pengamatan, empat kordinat objek terdeteksi. Silanglah **LEBIH DARI SATU** titik yang divalidasi terletak tepat di atas garis pinggiran luar lingkaran tersebut!',
+                    options: ['Satelit $A(6, 8)$', 'Satelit $B(-8, 6)$', 'Satelit $C(10, 0)$', 'Satelit $D(5, 5)$'],
+                    key: ["A", "B", "C"],
+                    discuss: 'Syarat mutlak suatu vektor koordinat $(x,y)$ menempati posisi TEPAT beririsan pada garis keliling sebuah lingkaran adalah ketika kalkulasi persamaan harus bernilai kuadrat setara dengan $r^2$ ($100$).\n\n- Opsi $A(6, 8) \\rightarrow 6^2 + 8^2 = 36 + 64 = 100$ (BENAR)\n- Opsi $B(-8, 6) \\rightarrow (-8)^2 + 6^2 = 64 + 36 = 100$ (BENAR)\n- Opsi $C(10, 0) \\rightarrow 10^2 + 0 = 100$ (BENAR)\n- Opsi $D(5, 5) \\rightarrow 5^2 + 5^2 = 50$, radius ini $< 100$, artinya titik terjebak bocor di zona dalam objek. (SALAH)'
+                },
+                {
+                    id: 4, type: "BS", 
+                    text: 'Pada sebuah penelitian geometri analitik, diciptakan model persamaan orbit melingkar yang berpusat mutlak di titik $P(2,3)$ dengan pancaran jari-jari gelombang radio $r=4$. Pilih (B/S) pada hipotesis berikut:',
+                    statements: ['Persamaan orbit aljabar yang terbentuk adalah $(x-2)^2 + (y-3)^2 = 16$', 'Zona radiasi tersebut akan mencakup (melewati) persis titik asal koordinat $(0,0)$'],
+                    key: ['B', 'S'],
+                    discuss: 'Hipotesis 1:\nSusunan pembentuk standar di pusat $(a,b)$ adalah $(x-a)^2 + (y-b)^2 = r^2$.\nKarena pusat $(2,3)$ dan $r=4$, distribusinya menjadi $(x-2)^2 + (y-3)^2 = 4^2 = 16$. Maka Benar Mutlak (B).\n\nHipotesis 2:\nValidasi lintas titik pangkal $(0,0)$: $(0-2)^2 + (0-3)^2 = 4 + 9 = 13$.\nNilai ini menunjukkan angka $13 < 16$, sehingga titik asal radiasi gagal tercover pada garis dan berada pada area pasif / zona mati internal (Tidak Dilewati Garis). Maka Salah Mutlak (S).'
+                }
+            ]
+        };
+
+        const alphabet = ['A','B','C','D','E'];
+        let state = 'START'; 
+        let currIdx = 0;
+        let answers = {}; 
+        let timerInt;
+        let timeLeft = exData.duration;
+
+        function startTimer() {
+            document.getElementById('timerBadge').style.display = 'flex';
+            timerInt = setInterval(() => {
+                if(timeLeft <= 0) { clearInterval(timerInt); forceSubmit(); return; }
+                timeLeft--;
+                const m = String(Math.floor(timeLeft/60)).padStart(2,'0');
+                const s = String(timeLeft%60).padStart(2,'0');
+                document.getElementById('timeDisplay').innerText = `${m}:${s}`;
+            }, 1000);
+        }
+
+        // Auto Render Math with KaTeX
+        function rerenderMath() {
+            setTimeout(() => {
+                if (window.renderMathInElement) {
+                    renderMathInElement(document.body, {
+                        delimiters: [{left: "$$", right: "$$", display: true}, {left: "$", right: "$", display: false}],
+                        throwOnError: false
+                    });
+                }
+            }, 10);
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            let html = '';
+
+            if(state === 'START') {
+                document.getElementById('timerBadge').style.display = 'none';
+                html = `
+                    <div class="card" style="max-width: 600px; margin: 4rem auto; text-align: center;">
+                        <div class="badge">${exData.category}</div>
+                        <h1 class="header-title">${exData.title}</h1>
+                        <p style="color: var(--text-muted); margin-bottom: 2rem;">${exData.desc}</p>
+                        
+                        <div style="background: #F1F5F9; padding: 1.5rem; border-radius: 12px; display:flex; justify-content: space-around; margin-bottom: 2rem;">
+                            <div><strong style="display:block; font-size:1.5rem; color:var(--primary)">${exData.questions.length}</strong>Soal Ujian</div>
+                            <div><strong style="display:block; font-size:1.5rem; color:var(--primary)">15</strong>Menit Ujian</div>
+                        </div>
+                        
+                        <button class="btn btn-primary" style="width: 100%; padding: 1rem; font-size: 1.1rem;" onclick="startExam()">Mulai Simulasi Ujian 🚀</button>
+                    </div>
+                `;
+            } 
+            else if(state === 'EXAM') {
+                html = `
+                    <div class="app-grid">
+                        <main class="card">
+                            ${buildQuestionUI(currIdx, 'exam')}
+                            <div style="display: flex; justify-content: space-between; margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 1.5rem;">
+                                <button class="btn btn-outline" ${currIdx===0?'disabled':''} onclick="currIdx--; render()">⬅ Kembali</button>
+                                ${currIdx === exData.questions.length -1 
+                                    ? \`<button class="btn btn-success" onclick="if(confirm('Akhiri Ujian?')) forceSubmit()">Kumpulkan Ujian ✓</button>\`
+                                    : \`<button class="btn btn-primary" onclick="currIdx++; render()">Lanjut Soal ➡</button>\`
+                                }
+                            </div>
+                        </main>
+                        <aside class="card sidebar-area">
+                            <h3 style="font-weight: 700; margin-bottom: 1rem;">Navigasi Nomor</h3>
+                            <div class="grid-nav">
+                                ${exData.questions.map((_, i) => {
+                                    let cls = 'grid-item';
+                                    if(i === currIdx) cls += ' active';
+                                    else if(isAnswered(i)) cls += ' answered';
+                                    return \`<div class="\${cls}" onclick="currIdx=\${i}; render()">\${i+1}</div>\`;
+                                }).join('')}
+                            </div>
+                        </aside>
+                    </div>
+                `;
+            }
+            else if(state === 'RESULT') {
+                document.getElementById('timerBadge').style.display = 'none';
+                let correctCount = calculateScore();
+                let scoreDesc = correctCount === exData.questions.length ? "Sempurna! ✨" : "Kerja Bagus! 👍";
+
+                html = `
+                    <div class="card" style="max-width: 600px; margin: 4rem auto; text-align: center;">
+                        <h1 class="header-title">Ujian Telah Berakhir</h1>
+                        <p style="color: var(--text-muted); margin-bottom: 2rem;">Simulasi berhasil diakhiri secara sistem tertutup.</p>
+                        <div style="border: 2px solid var(--border); padding: 2rem; border-radius: 16px; margin-bottom: 2rem;">
+                            <h2 style="font-size: 3rem; color: var(--primary); margin-bottom: 0;">${correctCount*25}</h2>
+                            <p style="color: var(--text-muted); font-weight: 600;">Skor Akurasi (${correctCount}/${exData.questions.length})</p>
+                            <p style="font-weight: 700; margin-top:0.5rem; color:#10B981">${scoreDesc}</p>
+                        </div>
+                        <div style="display:flex; gap: 1rem; flex-wrap:wrap">
+                            <button class="btn btn-outline" style="flex:1; min-width:200px" onclick="state='DISCUSSION'; render()">📖 Layar Pembahasan</button>
+                            <button class="btn btn-primary" style="flex:1; min-width:200px" onclick="downloadPDFNative(event)">🖨️ Download Format PDF</button>
+                        </div>
+                    </div>
+                `;
+            }
+            else if(state === 'DISCUSSION') {
+                html = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 2rem;">
+                        <button class="btn btn-outline" onclick="state='RESULT'; render()">⬅ Kembali ke Nilai</button>
+                        <h1 class="header-title" style="margin:0">Buku Pembahasan</h1>
+                        <button class="btn btn-primary" onclick="downloadPDFNative(event)">🖨️ Download Format PDF</button>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 2rem;">
+                        ${buildDiscussionRaw()}
+                    </div>
+                `;
+            }
+
+            app.innerHTML = html;
+            rerenderMath();
+            
+            // Build the shadow PDF area purely for export logic
+            document.getElementById('printArea').innerHTML = `
+                <div style="margin-bottom:2rem; border-bottom:2px solid #EEE; padding-bottom:1rem;">
+                    <h1 style="color:#0F172A; margin:0">${exData.title}</h1>
+                    <div style="color:#2563EB; font-weight:bold; font-size:12px; margin-top:4px">${exData.category} • DOKUMEN CETAK • NILAI: ${calculateScore()*25}/100</div>
+                </div>
+                ${buildDiscussionRaw()}
+            `;
+        }
+
+        // --- EXPORT PDF ENGINE VIA HTML2PDF ---
+        function downloadPDFNative(event) {
+            const el = document.getElementById('printArea');
+            el.style.display = 'block'; 
+            rerenderMath(); 
+            
+            const btn = event.currentTarget || event.target;
+            const originalText = btn.innerText;
+            btn.innerText = "⏳ Sedang Merakit PDF...";
+            
+            setTimeout(() => {
+                html2pdf().set({
+                    margin: 0.5,
+                    filename: 'Sistem Ujian Vimara.pdf',
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2 },
+                    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+                }).from(el).save().then(() => {
+                    el.style.display = 'none'; 
+                    btn.innerText = originalText;
+                });
+            }, 800); 
+        }
+
+        function startExam() {
+            state = 'EXAM';
+            answers = {};
+            currIdx = 0;
+            timeLeft = exData.duration;
+            startTimer();
+            render();
+        }
+
+        function forceSubmit() {
+            clearInterval(timerInt);
+            state = 'RESULT';
+            render();
+        }
+
+        function isAnswered(idx) {
+            let a = answers[idx];
+            if(a === undefined) return false;
+            if(Array.isArray(a)) return a.length > 0;
+            if(typeof a === 'string') return a.trim() !== '';
+            return true;
+        }
+
+        function buildDiscussionRaw() {
+            return exData.questions.map((q, i) => `
+                <div class="pdf-q-card">
+                    <div class="pdf-q-left">${buildQuestionUI(i, 'discussion')}</div>
+                    <div class="pdf-q-right">
+                        <div style="color:var(--primary); font-weight:800; font-size:1.1rem; margin-bottom:0.5rem">🔑 Kunci Jawaban Resmi:</div>
+                        <p style="font-weight:700; font-size:1rem; margin-bottom:1.5rem; background:white; padding:0.5rem 1rem; border-radius:6px; border:1px solid #CCC; display:inline-block">${formatAnswerReadable(q.type, q.key)}</p>
+                        
+                        <div style="color: #10B981; font-weight:800; font-size:1.1rem; margin-bottom:0.5rem">📝 Penjelasan Akademik:</div>
+                        <div style="line-height:1.6; white-space:pre-wrap;">${q.discuss}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function buildQuestionUI(idx, mode) {
+            const q = exData.questions[idx];
+            let typeBadge = q.type === 'PG' ? 'PILIHAN GANDA' : q.type === 'PGK' ? 'PG KOMPLEKS' : q.type === 'BS' ? 'BENAR SALAH' : 'ISIAN SINGKAT';
+            let uAns = answers[idx];
+
+            let content = `
+                <div class="q-number-header">
+                    <span>Soal No. ${idx + 1}</span>
+                    <span class="badge" style="margin:0">${typeBadge}</span>
+                </div>
+                <div class="q-text" style="white-space:pre-wrap">${q.text}</div>
+            `;
+
+            if(q.type === 'PG') {
+                content += q.options.map((opt, i) => {
+                    const lnt = alphabet[i];
+                    const isSel = mode === 'exam' && uAns === lnt;
+                    let discCls = '';
+                    if(mode === 'discussion') {
+                        if(lnt === q.key) discCls = 'correct-ans';
+                        else if(uAns === lnt) discCls = 'wrong-ans';
+                    }
+                    return \`<div class="opt-row \${isSel?'selected':''} \${discCls}" \${mode==='exam'?\`onclick="setAns(\${idx}, '\${lnt}')"\`:''}>
+                        <div class="opt-bullet">\${lnt}</div><div>\${opt}</div>
+                        \${mode==='discussion' && uAns===lnt && lnt!==q.key ? '<span style="margin-left:auto; color:#DC2626; font-weight:bold">✗</span>':''}
+                    </div>\`;
+                }).join('');
+            }
+            else if(q.type === 'PGK') {
+                let arrAns = Array.isArray(uAns) ? uAns : [];
+                content += q.options.map((opt, i) => {
+                    const lnt = alphabet[i];
+                    const isSel = mode === 'exam' && arrAns.includes(lnt);
+                    let discCls = '';
+                    if(mode === 'discussion') {
+                        if(q.key.includes(lnt)) discCls = 'correct-ans';
+                        else if(arrAns.includes(lnt)) discCls = 'wrong-ans';
+                    }
+                    return \`<div class="opt-row \${isSel?'selected':''} \${discCls}" \${mode==='exam'?\`onclick="setAnsPGK(\${idx}, '\${lnt}')"\`:''}>
+                        <div class="opt-checkbox"></div><div>\${opt}</div>
+                    </div>\`;
+                }).join('');
+            }
+            else if(q.type === 'BS') {
+                let uArr = Array.isArray(uAns) ? uAns : [];
+                content += \`<table class="true-false-table">
+                    <tr style="background:#F1F5F9"><th style="width:70%">Pernyataan Matematika</th><th style="width:15%">BENAR</th><th style="width:15%">SALAH</th></tr>
+                    \${q.statements.map((stmt, i) => {
+                        let radName = \`bs_\${mode}_\${idx}_\${i}\`;
+                        let sel = uArr[i];
+                        let bMark = mode==='exam' ? \`<input type="radio" name="\${radName}" \${sel==='B'?'checked':''} onchange="setAnsBS(\${idx}, \${i}, 'B')">\` : (sel==='B' ? '⚫' : '⚪');
+                        let sMark = mode==='exam' ? \`<input type="radio" name="\${radName}" \${sel==='S'?'checked':''} onchange="setAnsBS(\${idx}, \${i}, 'S')">\` : (sel==='S' ? '⚫' : '⚪');
+                        if(mode === 'discussion' && q.key[i] === 'B') bMark += ' <span style="color:green; font-weight:bold">✓</span>';
+                        if(mode === 'discussion' && q.key[i] === 'S') sMark += ' <span style="color:green; font-weight:bold">✓</span>';
+                        return \`<tr><td>\${stmt}</td><td>\${bMark}</td><td>\${sMark}</td></tr>\`;
+                    }).join('')}
+                </table>\`;
+            }
+            else if(q.type === 'ISIAN') {
+                let val = (uAns || '').toString();
+                if(mode === 'exam') {
+                    content += \`<input type="text" inputmode="numeric" class="text-input" placeholder="Ketik hasil akhir bilangan bulat..." value="\${val}" 
+                    onkeydown="if(!['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', '-', 'Minus'].includes(event.key) && !/^[0-9]$/.test(event.key)) event.preventDefault();"
+                    oninput="answers[\${idx}] = this.value; renderGridOnly();" autocomplete="off">\`;
+                } else {
+                    let isCor = (val.trim() === q.key);
+                    content += \`<div style="margin-bottom:1rem">Jawaban Anda:</div>
+                    <div class="text-input" style="background:\${isCor ? '#D1FAE5' : (val? '#FEE2E2':'#F1F5F9')}; border-color:\${isCor?'#059669':'#DC2626'}">\${val || '<i>Kosong</i>'}</div>\`;
+                }
+            }
+            return content;
+        }
+
+        function setAns(qIdx, val) { answers[qIdx] = val; render(); }
+        function setAnsPGK(qIdx, val) {
+            let arr = answers[qIdx] || [];
+            if(arr.includes(val)) arr = arr.filter(x => x !== val);
+            else arr.push(val);
+            answers[qIdx] = arr; render();
+        }
+        function setAnsBS(qIdx, rowIdx, val) {
+            let arr = answers[qIdx] || [];
+            arr[rowIdx] = val; answers[qIdx] = arr; renderGridOnly(); 
+        }
+        function renderGridOnly() {
+            document.querySelectorAll('.grid-item').forEach((dom, i) => {
+                dom.className = i === currIdx ? \`grid-item active \${isAnswered(i)?'answered':''}\` : \`grid-item \${isAnswered(i)?'answered':''}\`;
+            });
+        }
+
+        function calculateScore() {
+            let cor = 0;
+            exData.questions.forEach((q, i) => {
+                let ans = answers[i];
+                if(!ans) return;
+                if(q.type === 'PG' && ans === q.key) cor++;
+                else if(q.type === 'PGK' && Array.isArray(ans) && ans.length === q.key.length && ans.every(x => q.key.includes(x))) cor++;
+                else if(q.type === 'BS' && Array.isArray(ans) && JSON.stringify(ans) === JSON.stringify(q.key)) cor++;
+                else if(q.type === 'ISIAN' && typeof ans === 'string' && ans.trim() === q.key) cor++;
+            });
+            return cor;
+        }
+
+        function formatAnswerReadable(type, key) {
+            if(type === 'PG') return \`Opsi \${key}\`;
+            if(type === 'PGK') return \`Opsi \${key.join(' & ')}\`;
+            if(type === 'BS') return \`PerBaris: \${key.join(', ')}\`;
+            return \`"\${key}"\`;
+        }
+
+        render();
+    </script>
+</body>
+</html>

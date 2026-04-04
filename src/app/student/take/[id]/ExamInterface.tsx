@@ -483,9 +483,14 @@ export default function ExamInterface({
               <div className="v2-isian-wrap">
                 <input
                   type="text"
+                  inputMode="numeric"
                   className="form-input v2-isian-input"
                   placeholder="Ketik jawaban Anda di sini..."
                   value={answers[currentQ.id] || ''}
+                  onKeyDown={(e) => {
+                    if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', '-', 'Minus'].includes(e.key)) return;
+                    if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+                  }}
                   onChange={(e) => handleIsianChange(e.target.value)}
                   autoFocus
                 />
