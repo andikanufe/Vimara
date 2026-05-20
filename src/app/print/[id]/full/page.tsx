@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { db } from '@/lib/firebase-admin';
 import { getSession } from '@/lib/auth';
 import MathText from '@/components/MathText';
-import PrintClientHelper, { PrintWatermark } from './PrintClientHelper';
+import PrintClientHelper, { PrintWatermark } from '../PrintClientHelper';
 import { Metadata } from 'next';
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -88,23 +88,24 @@ export default async function PrintTryoutPage({ params }: { params: Promise<{ id
                 </div>
             </div>
 
-            {/* Card Layout for Questions */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {/* Column Layout for Questions */}
+            <div style={{ columnCount: 2, columnGap: '1.5rem' }}>
                 {questions.map((q: any, idx) => {
                     const qType = q.questionType as string;
                     const imgUrl = q.imageUrl as string | null;
 
                     return (
                         <div key={q.id} className="question-card" style={{ 
-                            display: 'flex', 
                             border: '1px solid #E2E8F0', 
                             borderRadius: '12px', 
                             overflow: 'hidden',
                             pageBreakInside: 'avoid',
-                            breakInside: 'avoid'
+                            breakInside: 'avoid',
+                            marginBottom: '1.5rem',
+                            display: 'inline-block', // Helps with break-inside in columns
+                            width: '100%'
                         }}>
-                            {/* Left Side: Question Content */}
-                            <div style={{ flex: '0 0 45%', padding: '1.25rem', borderRight: '1px dashed #CBD5E1' }}>
+                            <div style={{ padding: '1.25rem' }}>
                                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
                                     <div style={{ fontWeight: 'bold', marginRight: '0.5rem' }}>{idx + 1}.</div>
                                     <div style={{ flex: 1 }}>
@@ -168,9 +169,6 @@ export default async function PrintTryoutPage({ params }: { params: Promise<{ id
                                     </div>
                                 </div>
                             </div>
-                            
-                            {/* Right Side: Scratchpad Grid Area (35%) */}
-                            <div className="scratchpad-grid" style={{ flex: '1', backgroundColor: '#F8FAFC' }}></div>
                         </div>
                     );
                 })}

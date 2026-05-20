@@ -72,8 +72,14 @@ export default async function TryoutDetailPage({ params }: { params: Promise<{ i
             )}
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <a href={`/print/${tryoutDoc.id}/slides`} target="_blank" rel="noreferrer" className="btn" style={{ background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)', color: 'white', display: 'flex', alignItems: 'center', gap: '0.375rem', textDecoration: 'none', border: 'none', boxShadow: '0 2px 8px rgba(59,130,246,0.3)' }}>
+              🎬 Slide Soal (Video)
+            </a>
             <a href={`/print/${tryoutDoc.id}`} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ background: 'var(--bg-color)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.375rem', textDecoration: 'none', color: 'inherit' }}>
-              🖨️ Print Soal (Lokal)
+              🖨️ Print Soal (Coretan)
+            </a>
+            <a href={`/print/${tryoutDoc.id}/full`} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ background: 'var(--bg-color)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.375rem', textDecoration: 'none', color: 'inherit' }}>
+              🖨️ Print Soal (Full)
             </a>
             <Link href={`/admin/tryouts/${tryoutDoc.id}/edit`} className="btn btn-outline" style={{ background: 'white' }}>✏️ Edit Info</Link>
           </div>
